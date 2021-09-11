@@ -35,8 +35,9 @@ class RoleConventionsSniff implements Sniff {
     private int $_classStart = 0;
     private int $_classEnd = 0;
 
-    private ?DCIRole $_currentRole = null;
     private ?object $_currentRoleMethod = null;
+
+    private $_calls = [];
 
     private function checkRules($file) {
         // Sort all roles by pos to check method locations
@@ -56,6 +57,25 @@ class RoleConventionsSniff implements Sniff {
                     $data = [$role->name, $name];
                     $file->addError($msg, $method->pos, 'RoleMethodPos', $data);    
                 }
+            }
+        }
+
+        // Check valid role method calls
+        foreach($this->_calls as $call) {
+            extract($call);
+            // Redundant check:
+            //if($from->name == $to) continue;
+
+            $roleMethod = $this->_roles[$to]->roleMethods[$method];
+
+            if($roleMethod->access == T_PRIVATE) {
+                $msg = 'Private RoleMethod "%s->%s" called outside its own RoleMethods here.';
+                $data = [$to, $method];
+                $file->addError($msg, $callPos, 'RoleMethodAccessError', $data);
+
+                $msg = 'Private RoleMethod "%s->%s" called outside its own RoleMethods. Make it protected if this is intended.';
+                $data = [$to, $method];
+                $file->addError($msg, $roleMethod->pos, 'AdjustRoleMethodAccess', $data);
             }
         }
     }
@@ -95,9 +115,8 @@ class RoleConventionsSniff implements Sniff {
                 $this->_classEnd = 0;
                 $this->_roles = [];
             }
-            else if($this->_currentRole && $current['scope_closer'] == $this->_currentRoleMethod->end) {
+            else if($this->_currentRoleMethod && $current['scope_closer'] == $this->_currentRoleMethod->end) {
                 // RoleMethod ended.
-                $this->_currentRole = null;
                 $this->_currentRoleMethod = null;
             }
         }
@@ -111,13 +130,12 @@ class RoleConventionsSniff implements Sniff {
 
                 // TODO: Allow different convention than underscore
                 if(preg_match('/^([a-zA-Z]+)_+([a-zA-Z]+)$/', $funcName, $matches)) {
-                    $this->_currentRole = $this->role($matches[1])->addMethod(
+                    $this->_currentRoleMethod = $this->role($matches[1])->addMethod(
                         $matches[2], 
                         $funcNamePos,
                         $tokens[$funcPos]['scope_closer'],
                         $type
                     );
-                    $this->_currentRoleMethod = $this->_currentRole->roleMethods[$matches[2]];
                 }
             }
             // Check if it's a Role definition
@@ -145,12 +163,30 @@ class RoleConventionsSniff implements Sniff {
                 // Check if Role is accessed directly
                 if($pos === false) {
                     if(array_key_exists($name, $this->_roles)) {
-                        if(!$this->_currentRole || $this->_currentRole->name != $name) {
+                        if(!$this->_currentRoleMethod || $this->_currentRoleMethod->role->name != $name) {
                             $msg = 'Role "%s" accessed outside its RoleMethods';
                             $data = [$name];
                             $file->addError($msg, $methodPos, 'RoleAccessedOutsideItsMethods', $data);        
                         }
                     }                    
+                } else if($pos > 0) {
+                    // TODO: Allow different convention than underscore
+                    $roleName = substr($name, 0, $pos);
+
+                    while($name[$pos] == '_') 
+                        $pos++;
+
+                    $methodName = substr($name, $pos);
+                    
+                    // Check role method access, excluding same Role access
+                    if(!$this->_currentRoleMethod || $roleName != $this->_currentRoleMethod->role->name) {
+                        $this->_calls[] = [
+                            'from' => $this->_currentRoleMethod, 
+                            'to' => $roleName, 
+                            'method' => $methodName,
+                            'callPos' => $methodPos
+                        ];
+                    }
                 }
             }
         }
