@@ -19,7 +19,8 @@ class RoleConventionsSniff implements Sniff {
         return [
             T_PRIVATE, T_PROTECTED, 
             T_CLASS, T_CLOSE_CURLY_BRACKET,
-            T_VARIABLE
+            T_VARIABLE,
+            T_DOC_COMMENT_TAG
         ];
     }
 
@@ -94,19 +95,31 @@ class RoleConventionsSniff implements Sniff {
         $current = $tokens[$stackPtr];
         $type = $current['code'];
 
+        // Check if class should be parsed
+        if($type == T_DOC_COMMENT_TAG && $this->_classStart == 0) {
+            $tag = strtolower($current['content']);
+
+            if(
+                in_array($tag, ['@context', '@dci', '@dcicontext'])
+                &&
+                $classPos = $file->findNext(T_CLASS, $stackPtr, null, false, null, true)
+            ) {
+                $class = $tokens[$classPos];
+
+                $this->_classStart = $class['scope_opener'];
+                $this->_classEnd = $class['scope_closer'];
+
+                if(!$file->getClassProperties($classPos)['is_final']) {
+                    $msg = 'A DCI Context must be final.';
+                    $file->addError($msg, $classPos, 'ContextNotFinal');
+                }
+            }
+        }
+        
         // Only parse inside a class
-        if($type != T_CLASS && $this->_classStart == 0) {
-            return;
-        }
+        if($this->_classStart == 0) return;
 
-        if($type == T_CLASS) {
-            // TODO: Check if class is a DCI Context, if not, ignore.
-            $this->_classStart = $current['scope_opener'];
-            $this->_classEnd = $current['scope_closer'];
-
-            // TODO: Check if class is sealed
-        }
-        else if($type == T_CLOSE_CURLY_BRACKET) {
+        if($type == T_CLOSE_CURLY_BRACKET) {
             if($this->_classStart > 0 && $current['scope_closer'] == $this->_classEnd) {
                 // Class ended, check all DCI rules.
                 $this->checkRules($file);                
@@ -170,9 +183,9 @@ class RoleConventionsSniff implements Sniff {
                         }
                     }                    
                 } else if($pos > 0) {
-                    // TODO: Allow different convention than underscore
                     $roleName = substr($name, 0, $pos);
-
+                    
+                    // TODO: Allow different convention than underscore
                     while($name[$pos] == '_') 
                         $pos++;
 
@@ -192,14 +205,5 @@ class RoleConventionsSniff implements Sniff {
         }
 
         //file_put_contents('e:\temp\tokens.json', json_encode($tokens, JSON_PRETTY_PRINT));
-
-        /*
-        if ($tokens[$stackPtr]['content'][0] === '#') {
-            $role = $tokens[$rolePos];
-            $msg = 'Found role: %s';
-            $data  = array(trim($tokens[$rolePos]['content']));
-            $file->addWarning($msg, $rolePos, 'Found', $data);    
-        }
-        */
     }
 }
