@@ -114,11 +114,6 @@ class RoleConventionsSniff implements Sniff {
 
                 $this->_classStart = $class['scope_opener'];
                 $this->_classEnd = $class['scope_closer'];
-
-                if(!$file->getClassProperties($classPos)['is_final']) {
-                    $msg = 'A DCI Context must be final.';
-                    $file->addError($msg, $classPos, 'ContextNotFinal');
-                }
             }
         }
         
