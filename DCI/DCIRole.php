@@ -11,7 +11,10 @@ class DCIRole {
         $this->name = $name;
     }
 
-    public function addMethod($name, $pos, $access) {
-        $this->roleMethods[$name] = ['pos' => $pos, 'access' => $access];
+    public function addMethod($name, $pos, $end, $access) {
+        $this->roleMethods[$name] = (object)[
+            'pos' => $pos, 'end' => $end, 'access' => $access
+        ];
+        return $this;
     }
 }

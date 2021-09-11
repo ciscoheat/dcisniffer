@@ -18,25 +18,29 @@ class RoleConventionsSniff implements Sniff {
     public function register() {
         return [
             T_PRIVATE, T_PROTECTED, 
-            T_CLASS, T_CLOSE_CURLY_BRACKET
+            T_CLASS, T_CLOSE_CURLY_BRACKET,
+            T_VARIABLE
         ];
     }
 
-    private $roles = [];
+    private $_roles = [];
 
     private function role(string $name) {
-        if(!array_key_exists($name, $this->roles)) {
-            $this->roles[$name] = new DCIRole($name);
+        if(!array_key_exists($name, $this->_roles)) {
+            $this->_roles[$name] = new DCIRole($name);
         }
-        return $this->roles[$name];
+        return $this->_roles[$name];
     }
 
-    private $start = 0;
-    private $end = 0;
+    private int $_classStart = 0;
+    private int $_classEnd = 0;
+
+    private ?DCIRole $_currentRole = null;
+    private ?object $_currentRoleMethod = null;
 
     private function checkRules($file) {
         // Sort all roles by pos to check method locations
-        $roles = array_values($this->roles);
+        $roles = array_values($this->_roles);
         usort($roles, function($a, $b) {
             return $a->pos < $b->pos ? -1 : 1;
         });
@@ -47,12 +51,10 @@ class RoleConventionsSniff implements Sniff {
             $end = $roles[$pos + 1]->pos ?? PHP_INT_MAX;
 
             foreach($role->roleMethods as $name => $method) {
-                $methodPos = $method['pos'];
-
-                if($methodPos < $start || $methodPos > $end) {
+                if($method->pos < $start || $method->pos > $end) {
                     $msg = 'RoleMethod "%s->%s" is not positioned below its Role.';
                     $data = [$role->name, $name];
-                    $file->addError($msg, $methodPos, 'RoleMethodPos', $data);    
+                    $file->addError($msg, $method->pos, 'RoleMethodPos', $data);    
                 }
             }
         }
@@ -73,23 +75,30 @@ class RoleConventionsSniff implements Sniff {
         $type = $current['code'];
 
         // Only parse inside a class
-        if($type != T_CLASS && $this->start == 0) {
+        if($type != T_CLASS && $this->_classStart == 0) {
             return;
         }
 
         if($type == T_CLASS) {
             // TODO: Check if class is a DCI Context, if not, ignore.
-            $this->start = $current['scope_opener'];
-            $this->end = $current['scope_closer'];
+            $this->_classStart = $current['scope_opener'];
+            $this->_classEnd = $current['scope_closer'];
 
             // TODO: Check if class is sealed
         }
         else if($type == T_CLOSE_CURLY_BRACKET) {
-            if($this->start > 0 && $current['scope_closer'] == $this->end) {
+            if($this->_classStart > 0 && $current['scope_closer'] == $this->_classEnd) {
                 // Class ended, check all DCI rules.
                 $this->checkRules($file);                
-                $this->start = 0;
-                $this->end = 0;
+                // Reset class state
+                $this->_classStart = 0;
+                $this->_classEnd = 0;
+                $this->_roles = [];
+            }
+            else if($this->_currentRole && $current['scope_closer'] == $this->_currentRoleMethod->end) {
+                // RoleMethod ended.
+                $this->_currentRole = null;
+                $this->_currentRoleMethod = null;
             }
         }
         else if($type == T_PRIVATE || $type == T_PROTECTED) {
@@ -100,18 +109,49 @@ class RoleConventionsSniff implements Sniff {
                 $funcNamePos = $file->findNext(T_STRING, $funcPos);
                 $funcName = $tokens[$funcNamePos]['content'];
 
-                if(preg_match('/^([a-zA-Z]+)(_{1,2})([a-zA-Z]+)$/', $funcName, $matches)) {
-                    $this->role($matches[1])->addMethod(
-                        $matches[3], 
+                // TODO: Allow different convention than underscore
+                if(preg_match('/^([a-zA-Z]+)_+([a-zA-Z]+)$/', $funcName, $matches)) {
+                    $this->_currentRole = $this->role($matches[1])->addMethod(
+                        $matches[2], 
                         $funcNamePos,
-                        strlen($matches[2] == 1 ? T_PRIVATE : T_PROTECTED
-                    ));
+                        $tokens[$funcPos]['scope_closer'],
+                        $type
+                    );
+                    $this->_currentRoleMethod = $this->_currentRole->roleMethods[$matches[2]];
                 }
             }
             // Check if it's a Role definition
-            else if($type == T_PRIVATE && $rolePos = $file->findNext(T_VARIABLE, $stackPtr, null, false, null, true)) {
-                $role = substr($tokens[$rolePos]['content'], 1);
-                $this->role($role)->pos = $rolePos;
+            else if($rolePos = $file->findNext(T_VARIABLE, $stackPtr, null, false, null, true)) {
+                $name = substr($tokens[$rolePos]['content'], 1);
+                // Check if normal var or a Role
+                // TODO: Allow different convention than underscore
+                if($name[0] != '_' && $type != T_PRIVATE) {
+                    $msg = 'Role "%s" must be private.';
+                    $data = [$name];
+                    $file->addError($msg, $rolePos, 'RoleAccess', $data);
+                }
+                else {
+                    $this->role($name)->pos = $rolePos;
+                }
+            }
+        }
+        else if($type == T_VARIABLE && $current['content'] == '$this') {
+            if($methodPos = $file->findNext(T_STRING, $stackPtr, null, false, null, true)) {
+                $name = $tokens[$methodPos]['content'];
+                
+                // TODO: Allow different convention than underscore
+                $pos = strpos($name, '_');
+
+                // Check if Role is accessed directly
+                if($pos === false) {
+                    if(array_key_exists($name, $this->_roles)) {
+                        if(!$this->_currentRole || $this->_currentRole->name != $name) {
+                            $msg = 'Role "%s" accessed outside its RoleMethods';
+                            $data = [$name];
+                            $file->addError($msg, $methodPos, 'RoleAccessedOutsideItsMethods', $data);        
+                        }
+                    }                    
+                }
             }
         }
 
