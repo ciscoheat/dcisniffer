@@ -48,9 +48,15 @@ class RoleConventionsSniff implements Sniff {
         });
         
         //print_r($roles);
-        foreach ($roles as $pos => $role) {
+        foreach ($roles as $key => $role) {
+            if($role->pos == 0) {
+                $msg = 'Role "%s" does not exist. Add it as a private var above its RoleMethods.';
+                $data = [$role->name];
+                $file->addError($msg, reset($role->roleMethods)->pos, 'NoRoleExists', $data);
+            }
+
             $start = $role->pos;
-            $end = $roles[$pos + 1]->pos ?? PHP_INT_MAX;
+            $end = $roles[$key + 1]->pos ?? PHP_INT_MAX;
 
             foreach($role->roleMethods as $name => $method) {
                 if($method->pos < $start || $method->pos > $end) {
@@ -156,13 +162,15 @@ class RoleConventionsSniff implements Sniff {
                 $name = substr($tokens[$rolePos]['content'], 1);
                 // Check if normal var or a Role
                 // TODO: Allow different convention than underscore
-                if($name[0] != '_' && $type != T_PRIVATE) {
-                    $msg = 'Role "%s" must be private.';
-                    $data = [$name];
-                    $file->addError($msg, $rolePos, 'RoleAccess', $data);
-                }
-                else {
-                    $this->role($name)->pos = $rolePos;
+                if(strpos($name, '_') === false) {
+                    if($type != T_PRIVATE) {
+                        $msg = 'Role "%s" must be private.';
+                        $data = [$name];
+                        $file->addError($msg, $rolePos, 'InvalidRoleAccess', $data);
+                    }
+                    else {
+                        $this->role($name)->pos = $rolePos;
+                    }
                 }
             }
         }
