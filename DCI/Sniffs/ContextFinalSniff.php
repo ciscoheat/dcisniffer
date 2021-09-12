@@ -14,13 +14,54 @@ class ContextFinalSniff implements Sniff {
      */
     public function register() {
         return [
-            T_CLOSE_CURLY_BRACKET,
-            T_DOC_COMMENT_TAG
+            T_DOC_COMMENT_TAG, T_CLOSE_CURLY_BRACKET, // Context detection
+            T_CLASS // "final" keyword check
         ];
     }
 
+    private File $file;
+    private array $tokens;
+
     private int $_classStart = 0;
     private int $_classEnd = 0;
+
+    private function checkClassStart($token, $stackPtr) {
+        // Check if class should be parsed
+        if($token['code'] == T_DOC_COMMENT_TAG && $this->_classStart == 0) {
+            $tag = strtolower($token['content']);
+            $tagged = in_array($tag, ['@context', '@dci', '@dcicontext']);
+
+            if(
+                $tagged &&
+                $classPos = $this->file->findNext(
+                    T_CLASS, $stackPtr, null, false, null, true
+                )
+            ) {
+                $class = $this->tokens[$classPos];
+
+                $this->_classStart = $class['scope_opener'];
+                $this->_classEnd = $class['scope_closer'];
+            }
+        }
+        
+        return $this->_classStart > 0;
+    }
+
+    private function checkClassEnd($token) {
+        if(
+            $this->_classStart > 0 &&
+            $token['code'] == T_CLOSE_CURLY_BRACKET &&
+            $token['scope_closer'] == $this->_classEnd
+        ) {
+            // Reset class state
+            $this->_classStart = 0;
+            $this->_classEnd = 0;
+
+            return true;
+        }
+
+        return false;
+    }    
 
     /**
      * Processes this sniff, when one of its tokens is encountered.
@@ -32,37 +73,23 @@ class ContextFinalSniff implements Sniff {
      * @return void
      */
     public function process(File $file, $stackPtr) {
-        $tokens = $file->getTokens();
+        $this->file = $file;        
+        $this->tokens = $tokens = $file->getTokens();
+
         $current = $tokens[$stackPtr];
         $type = $current['code'];
 
-        // Check if class should be parsed
-        if($type == T_DOC_COMMENT_TAG && $this->_classStart == 0) {
-            $tag = strtolower($current['content']);
+        if(!$this->checkClassStart($current, $stackPtr))
+            return;
 
-            if(
-                in_array($tag, ['@context', '@dci', '@dcicontext'])
-                &&
-                $classPos = $file->findNext(T_CLASS, $stackPtr, null, false, null, true)
-            ) {
-                $class = $tokens[$classPos];
+        if($this->checkClassEnd($current))
+            return;
 
-                $this->_classStart = $class['scope_opener'];
-                $this->_classEnd = $class['scope_closer'];
-
-                if(!$file->getClassProperties($classPos)['is_final']) {
-                    $msg = 'A DCI Context must be final.';
-                    $file->addError($msg, $classPos, 'ContextNotFinal');
-                }
+        if($type == T_CLASS) {
+            if(!$file->getClassProperties($stackPtr)['is_final']) {
+                $msg = 'A DCI Context class must be final.';
+                $file->addError($msg, $stackPtr, 'ContextNotFinal');
             }
-        }
-        
-        if($type == T_CLOSE_CURLY_BRACKET) {
-            if($this->_classStart > 0 && $current['scope_closer'] == $this->_classEnd) {
-                // Class ended
-                $this->_classStart = 0;
-                $this->_classEnd = 0;
-            }
-        }
+        }        
     }
 }
