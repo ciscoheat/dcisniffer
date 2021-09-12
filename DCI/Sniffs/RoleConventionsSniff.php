@@ -14,10 +14,9 @@ class RoleConventionsSniff implements Sniff {
      */
     public function register() {
         return [
-            T_PUBLIC, T_PRIVATE, T_PROTECTED, 
-            T_CLASS, T_CLOSE_CURLY_BRACKET,
-            T_VARIABLE,
-            T_DOC_COMMENT_TAG
+            T_DOC_COMMENT_TAG, T_CLOSE_CURLY_BRACKET, // Context detection
+            T_PUBLIC, T_PRIVATE, T_PROTECTED, // Role/RoleMethod access
+            T_VARIABLE // Role assignments
         ];
     }
 
