@@ -201,25 +201,9 @@ class RoleConventionsSniff implements Sniff {
     }
 
     private function checkClassEnd($token) {
-        if(
-            $this->_classStart > 0 &&
+        return $this->_classStart > 0 &&
             $token['code'] == T_CLOSE_CURLY_BRACKET &&
-            $token['scope_closer'] == $this->_classEnd
-        ) {
-            // Class ended, check all DCI rules.
-            $this->checkRules();
-
-            // Reset class state
-            $this->_classStart = 0;
-            $this->_classEnd = 0;
-            $this->_currentMethod = null;
-            $this->_roles = [];
-            $this->_methods = [];
-
-            return true;
-        }
-
-        return false;
+            $token['scope_closer'] == $this->_classEnd;
     }
 
     /**
@@ -241,8 +225,19 @@ class RoleConventionsSniff implements Sniff {
         if(!$this->checkClassStart($current, $stackPtr))
             return;
 
-        if($this->checkClassEnd($current))
+        if($this->checkClassEnd($current)) {
+            // Class ended, check all DCI rules.
+            $this->checkRules();
+
+            // Reset class state
+            $this->_classStart = 0;
+            $this->_classEnd = 0;
+            $this->_currentMethod = null;
+            $this->_roles = [];
+            $this->_methods = [];
+            
             return;
+        }
 
         switch ($type) {
             case T_CLOSE_CURLY_BRACKET:

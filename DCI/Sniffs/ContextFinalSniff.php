@@ -27,7 +27,7 @@ class ContextFinalSniff implements Sniff {
 
     private function checkClassStart($token, $stackPtr) {
         // Check if class should be parsed
-        if($token['code'] == T_DOC_COMMENT_TAG && $this->_classStart == 0) {
+        if($this->_classStart == 0 && $token['code'] == T_DOC_COMMENT_TAG) {
             $tag = strtolower($token['content']);
             $tagged = in_array($tag, ['@context', '@dci', '@dcicontext']);
 
@@ -48,20 +48,10 @@ class ContextFinalSniff implements Sniff {
     }
 
     private function checkClassEnd($token) {
-        if(
-            $this->_classStart > 0 &&
+        return $this->_classStart > 0 &&
             $token['code'] == T_CLOSE_CURLY_BRACKET &&
-            $token['scope_closer'] == $this->_classEnd
-        ) {
-            // Reset class state
-            $this->_classStart = 0;
-            $this->_classEnd = 0;
-
-            return true;
-        }
-
-        return false;
-    }    
+            $token['scope_closer'] == $this->_classEnd;
+    }
 
     /**
      * Processes this sniff, when one of its tokens is encountered.
@@ -82,8 +72,11 @@ class ContextFinalSniff implements Sniff {
         if(!$this->checkClassStart($current, $stackPtr))
             return;
 
-        if($this->checkClassEnd($current))
+        if($this->checkClassEnd($current)) {
+            $this->_classStart = 0;
+            $this->_classEnd = 0;
             return;
+        }
 
         if($type == T_CLASS) {
             if(!$file->getClassProperties($stackPtr)['is_final']) {
