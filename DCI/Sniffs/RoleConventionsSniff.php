@@ -84,6 +84,7 @@ class RoleConventionsSniff implements Sniff {
 
     private function checkRules() {
         $file = $this->file;
+        $assignedOk = false;
 
         foreach ($this->_methods as $method) {
             $assigned = [];
@@ -91,7 +92,7 @@ class RoleConventionsSniff implements Sniff {
                 // Check if assignment
                 if($ref->isAssignment) {
                     if(array_key_exists($ref->to, $this->_roles))
-                        $assigned[] = $ref->to;
+                        $assigned[$ref->to] = $ref;
                 }
                 else if(!$ref->roleMethod) {
                     // References a Role directly, allowed only if in one of its RoleMethods
@@ -127,12 +128,21 @@ class RoleConventionsSniff implements Sniff {
                 }    
             }
 
-            if(count($assigned) > 0 && count($assigned) < count($this->_roles)) {
-                $missing = array_diff(array_keys($this->_roles), $assigned);
-                $msg = 'All Roles must be bound inside a single method. Missing: %s';
-                $data = [join(",", $missing)];
-                $file->addError($msg, $method->start, 'UnboundRoles', $data);
-                return;
+            if(count($assigned) > 0) {
+                if($assignedOk) {
+                    foreach ($assigned as $ref) {
+                        $msg = 'All Roles must be bound inside a single method.';
+                        $file->addError($msg, $ref->pos, 'RoleNotBoundInSingleMethod');
+                    }
+                }
+                else if(count($assigned) < count($this->_roles)) {
+                    $missing = array_diff(array_keys($this->_roles), array_keys($assigned));
+                    $msg = 'All Roles must be bound inside a single method. Missing: %s';
+                    $data = [join(", ", $missing)];
+                    $file->addError($msg, $method->start, 'RolesNotBoundInSingleMethod', $data);
+                } else {
+                    $assignedOk = true;
+                }
             }
         }
         
