@@ -22,6 +22,7 @@ class RoleConventionsSniff implements Sniff {
     }
 
     private File $file;
+    private array $tokens;
 
     private int $_classStart = 0;
     private int $_classEnd = 0;
@@ -128,7 +129,7 @@ class RoleConventionsSniff implements Sniff {
 
             if(count($assigned) > 0 && count($assigned) < count($this->_roles)) {
                 $missing = array_diff(array_keys($this->_roles), $assigned);
-                $msg = 'Not all Roles are bound inside a single method. Missing: %s';
+                $msg = 'All Roles must be bound inside a single method. Missing: %s';
                 $data = [join(",", $missing)];
                 $file->addError($msg, $method->start, 'UnboundRoles', $data);
                 return;
@@ -150,6 +151,49 @@ class RoleConventionsSniff implements Sniff {
         }
     }
 
+    private function checkClassStart($token, $stackPtr) {
+        // Check if class should be parsed
+        if($token['code'] == T_DOC_COMMENT_TAG && $this->_classStart == 0) {
+            $tag = strtolower($token['content']);
+            $tagged = in_array($tag, ['@context', '@dci', '@dcicontext']);
+
+            if(
+                $tagged &&
+                $classPos = $this->file->findNext(
+                    T_CLASS, $stackPtr, null, false, null, true
+                )
+            ) {
+                $class = $this->tokens[$classPos];
+
+                $this->_classStart = $class['scope_opener'];
+                $this->_classEnd = $class['scope_closer'];
+            }
+        }
+        
+        return $this->_classStart > 0;
+    }
+
+    private function checkClassEnd($token) {
+        if(
+            $this->_classStart > 0 &&
+            $token['code'] == T_CLOSE_CURLY_BRACKET &&
+            $token['scope_closer'] == $this->_classEnd
+        ) {
+            // Class ended, check all DCI rules.
+            $this->checkRules();
+
+            // Reset class state
+            $this->_classStart = 0;
+            $this->_classEnd = 0;
+            $this->_roles = [];
+            $this->_methods = [];
+
+            return true;
+        }
+
+        return false;
+    }
+
     /**
      * Processes this sniff, when one of its tokens is encountered.
      *
@@ -161,73 +205,57 @@ class RoleConventionsSniff implements Sniff {
      */
     public function process(File $file, $stackPtr) {
         $this->file = $file;
+        $this->tokens = $tokens = $file->getTokens();
 
-        $tokens = $file->getTokens();
         $current = $tokens[$stackPtr];
         $type = $current['code'];
 
-        // Check if class should be parsed
-        if($type == T_DOC_COMMENT_TAG && $this->_classStart == 0) {
-            $tag = strtolower($current['content']);
+        if(!$this->checkClassStart($current, $stackPtr))
+            return;
 
-            if(
-                in_array($tag, ['@context', '@dci', '@dcicontext'])
-                &&
-                $classPos = $file->findNext(T_CLASS, $stackPtr, null, false, null, true)
-            ) {
-                $class = $tokens[$classPos];
+        if($this->checkClassEnd($current))
+            return;
 
-                $this->_classStart = $class['scope_opener'];
-                $this->_classEnd = $class['scope_closer'];
-            }
-        }
-        
-        // Only parse inside a class
-        if($this->_classStart == 0) return;
-
-        if($type == T_CLOSE_CURLY_BRACKET) {
-            if($this->_classStart > 0 && $current['scope_closer'] == $this->_classEnd) {
-                // Class ended, check all DCI rules.
-                $this->checkRules();
-                // Reset class state
-                $this->_classStart = 0;
-                $this->_classEnd = 0;
-                $this->_roles = [];
-                $this->_methods = [];
-            }
-            else if($this->_currentMethod && $current['scope_closer'] == $this->_currentMethod->end) {
-                // RoleMethod ended.
-                $this->_currentMethod = null;
-            }
-        }
-        else if($type == T_PRIVATE || $type == T_PROTECTED || $type == T_PUBLIC) {
-            // Check if it's a method
-            if($funcPos = $file->findNext(T_FUNCTION, $stackPtr, null, false, null, true)) {
-                $funcToken = $tokens[$funcPos];
-                
-                $funcNamePos = $file->findNext(T_STRING, $funcPos);
-                $funcName = $tokens[$funcNamePos]['content'];
-
-                $this->_currentMethod = $this->addMethod(
-                    $funcName, $funcPos, $funcToken['scope_closer'], $type, $file
-                );
-            }
-            // Check if it's a Role definition
-            else if($rolePos = $file->findNext(T_VARIABLE, $stackPtr, null, false, null, true)) {
-                $name = substr($tokens[$rolePos]['content'], 1);
-                // Check if normal var or a Role
-                // TODO: Support another convention than underscore
-                if(strpos($name, '_') === false) {
-                    $this->addRole($name, $rolePos, $type, $file);
+        switch ($type) {
+            case T_CLOSE_CURLY_BRACKET:
+                if($this->_currentMethod && $current['scope_closer'] == $this->_currentMethod->end) {
+                    // RoleMethod ended.
+                    $this->_currentMethod = null;
                 }
-            }
-        }
-        else if($type == T_VARIABLE && $current['content'] == '$this') {
-            if($callPos = $file->findNext(T_STRING, $stackPtr, null, false, null, true)) {
-                $name = $tokens[$callPos]['content'];
-                $isAssignment = $file->findNext(T_EQUAL, $callPos, null, false, null, true);
-                $this->addRoleRef($this->_currentMethod, $name, $callPos, $isAssignment);
-            }
+                break;
+            
+            case T_PRIVATE:
+            case T_PROTECTED:
+            case T_PUBLIC:
+                // Check if it's a method
+                if($funcPos = $file->findNext(T_FUNCTION, $stackPtr, null, false, null, true)) {
+                    $funcToken = $tokens[$funcPos];
+                    
+                    $funcNamePos = $file->findNext(T_STRING, $funcPos);
+                    $funcName = $tokens[$funcNamePos]['content'];
+    
+                    $this->_currentMethod = $this->addMethod(
+                        $funcName, $funcPos, $funcToken['scope_closer'], $type, $file
+                    );
+                }
+                // Check if it's a Role definition
+                else if($rolePos = $file->findNext(T_VARIABLE, $stackPtr, null, false, null, true)) {
+                    $name = substr($tokens[$rolePos]['content'], 1);
+                    // Check if normal var or a Role
+                    // TODO: Support another convention than underscore
+                    if(strpos($name, '_') === false) {
+                        $this->addRole($name, $rolePos, $type, $file);
+                    }
+                }
+                break;
+
+            case T_VARIABLE:
+                if($current['content'] == '$this' && $callPos = $file->findNext(T_STRING, $stackPtr, null, false, null, true)) {
+                    $name = $tokens[$callPos]['content'];
+                    $isAssignment = $file->findNext(T_EQUAL, $callPos, null, false, null, true);
+                    $this->addRoleRef($this->_currentMethod, $name, $callPos, $isAssignment);
+                }
+                break;    
         }
     }
 }
