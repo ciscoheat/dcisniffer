@@ -59,7 +59,8 @@ class RoleConventionsSniff implements Sniff {
         
         $base = (object)[
             'name' => $name, 'start' => $start, 'end' => $end, 'access' => $access, 
-            'refs' => [], 'role' => $isRoleMethod ? [$matches[1], $matches[2]] : null
+            'refs' => [], 
+            'role' => $isRoleMethod ? (object)['name' => $matches[1], 'method' => $matches[2]] : null
         ];
 
         return $this->_methods[$name] = $base;
@@ -73,11 +74,17 @@ class RoleConventionsSniff implements Sniff {
 
         if(!$isRole && !$isRoleMethod) return;
 
+        if($isRoleMethod && $isAssignment) {
+            $msg = 'Cannot assign to a RoleMethod.';
+            $file->addError($msg, $pos, 'RoleMethodAssignment');
+            return;
+        }
+
         $method->refs[] = (object)[
             //'from' => $method,
             'to' => $to,
-            'roleMethod' => $isRoleMethod ? [$matches[1], $matches[2]] : null,
             'pos' => $pos,
+            'isRoleMethod' => $isRoleMethod,
             'isAssignment' => $isAssignment
         ];
     }
@@ -87,6 +94,12 @@ class RoleConventionsSniff implements Sniff {
         $assignedOk = false;
 
         foreach ($this->_methods as $method) {
+            if($method->role && !array_key_exists($method->role->name, $this->_roles)) {
+                $msg = 'Role "%s" does not exist. Add it as "private $%s;" above its RoleMethods.';
+                $data = [$method->role->name, $method->role->name];
+                $file->addError($msg, $method->start, 'NoRoleExists', $data);
+            }
+
             $assigned = [];
             foreach($method->refs as $ref) {
                 // Check if assignment
@@ -94,9 +107,9 @@ class RoleConventionsSniff implements Sniff {
                     if(array_key_exists($ref->to, $this->_roles))
                         $assigned[$ref->to] = $ref;
                 }
-                else if(!$ref->roleMethod) {
+                else if(!$ref->isRoleMethod) {
                     // References a Role directly, allowed only if in one of its RoleMethods
-                    if(!$method->role || $method->role[0] != $ref->to) {
+                    if(!$method->role || $method->role->name != $ref->to) {
                         $msg = 'Role "%s" accessed outside its RoleMethods';
                         $data = [$ref->to];
                         $file->addError($msg, $ref->pos, 'RoleAccessedOutsideItsMethods', $data);
@@ -104,25 +117,20 @@ class RoleConventionsSniff implements Sniff {
                 } else {
                     // References a RoleMethod, check access
                     $roleMethod = $this->_methods[$ref->to];
-                    $roleName = $roleMethod->role[0];
-                    $roleMethodName = $roleMethod->role[1];
+                    $roleName = $roleMethod->role->name;
+                    $roleMethodName = $roleMethod->role->method;
 
-                    if(!array_key_exists($roleName, $this->_roles)) {
-                        $msg = 'Role "%s" does not exist. Add it as "private $%s;" above its RoleMethods.';
-                        $data = [$roleName, $roleName];
-                        $file->addError($msg, $roleMethod->start, 'NoRoleExists', $data);
-                    } else {
-                        // Add RoleMethod to the Role
-                        $this->_roles[$roleName]->methods[$roleMethodName] = $roleMethod;
-                    }
+                    // Add RoleMethod to the Role, will be looped through
+                    // after the current loop to check RoleMethod positions.
+                    $this->_roles[$roleName]->methods[$roleMethodName] = $roleMethod;
     
-                    if((!$method->role || $method->role[0] != $roleName) && $roleMethod->access == T_PRIVATE) {
+                    if((!$method->role || $method->role->name != $roleName) && $roleMethod->access == T_PRIVATE) {
                         $msg = 'Private RoleMethod "%s->%s" accessed outside its own RoleMethods here.';
-                        $data = $ref->roleMethod;
+                        $data = [$roleName, $roleMethodName];
                         $file->addError($msg, $ref->pos, 'InvalidRoleMethodAccess', $data);
     
                         $msg = 'Private RoleMethod "%s->%s" accessed outside its own RoleMethods. Make it protected if this is intended.';
-                        $data = $ref->roleMethod;
+                        $data = [$roleName, $roleMethodName];
                         $file->addError($msg, $roleMethod->start, 'AdjustRoleMethodAccess', $data);
                     }
                 }    
