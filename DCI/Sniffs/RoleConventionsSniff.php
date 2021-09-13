@@ -64,7 +64,7 @@ final class RoleConventionsSniff implements Sniff {
             $tagged = in_array($tag, ['@context', '@dci', '@dcicontext']);
 
             if($tagged && $classPos = $this->parser_findNext(T_CLASS, $stackPtr)) {
-                $class = $this->tokens_get($classPos);
+                $class = $this->parser_tokenAt($classPos);
                 $this->currentClass_set($class['scope_opener'], $class['scope_closer']);
             }
         }
@@ -223,16 +223,12 @@ final class RoleConventionsSniff implements Sniff {
         $this->parser->addWarning($msg, $pos, $errorCode, $data);
     }
 
-    /////////////////////////////////////////////////////////////////
-
-    private array $tokens;
-
-    protected function tokens_get(int $tokenAtPos) {
-        return $this->tokens[$tokenAtPos];
+    protected function parser_getTokens() {
+        return $this->parser->getTokens();
     }
 
-    protected function tokens_getAll() {
-        return $this->tokens;
+    protected function parser_tokenAt($pos) {
+        return $this->parser_getTokens()[$pos];
     }
 
     /////////////////////////////////////////////////////////////////
@@ -304,7 +300,6 @@ final class RoleConventionsSniff implements Sniff {
 
     private function rebind(File $parser, $newClass = false, $newMethod = false) {
         $this->parser = $parser;
-        $this->tokens = $parser->getTokens();
 
         if(!$this->currentClass_exists() || $newClass) {
             $this->currentClass = (object)['start' => 0, 'end' => 0];
@@ -333,7 +328,7 @@ final class RoleConventionsSniff implements Sniff {
 
         //if(!file_exists('e:\temp\tokens.json')) file_put_contents('e:\temp\tokens.json', json_encode($tokens, JSON_PRETTY_PRINT));
 
-        $tokens = $this->tokens_getAll();
+        $tokens = $this->parser_getTokens();
         $current = $tokens[$stackPtr];
         $type = $current['code'];
 
