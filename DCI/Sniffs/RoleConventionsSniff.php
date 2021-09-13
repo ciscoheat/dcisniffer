@@ -52,32 +52,6 @@ final class RoleConventionsSniff implements Sniff {
         return $this->currentClass->end ?? 0;
     }
 
-    protected function currentClass_set(int $start, int $end) {
-        $this->currentClass->start = $start;
-        $this->currentClass->end = $end;
-        $this->currentClass->method = null;
-    }
-
-    protected function currentClass_checkStart($token, $stackPtr) {
-        if($token['code'] == T_DOC_COMMENT_TAG && !$this->currentClass_exists()) {
-            $tag = strtolower($token['content']);
-            $tagged = in_array($tag, ['@context', '@dci', '@dcicontext']);
-
-            if($tagged && $classPos = $this->parser_findNext(T_CLASS, $stackPtr)) {
-                $class = $this->parser_tokenAt($classPos);
-                $this->currentClass_set($class['scope_opener'], $class['scope_closer']);
-            }
-        }
-        
-        return $this->currentClass_exists();
-    }
-
-    protected function currentClass_checkEnd($token) {
-        return $this->currentClass_exists() &&
-            $token['code'] == T_CLOSE_CURLY_BRACKET &&
-            $token['scope_closer'] == $this->currentClass_end();
-    }
-
     protected function currentClass_checkRules() {
         $assignedOk = 0;
 
@@ -231,6 +205,30 @@ final class RoleConventionsSniff implements Sniff {
         return $this->parser_getTokens()[$pos];
     }
 
+    protected function parser_checkClass($token, $stackPtr) {
+        if($token['code'] == T_DOC_COMMENT_TAG && !$this->currentClass_exists()) {
+            $tag = strtolower($token['content']);
+            $tagged = in_array($tag, ['@context', '@dci', '@dcicontext']);
+
+            if($tagged && $classPos = $this->parser_findNext(T_CLASS, $stackPtr)) {
+                // New class found, rebind
+                $class = $this->parser_tokenAt($classPos);
+                $this->rebind(false, $class);
+                return true;
+            }
+        } else if($this->currentClass_exists() &&
+                $token['code'] == T_CLOSE_CURLY_BRACKET &&
+                $token['scope_closer'] == $this->currentClass_end()
+        ) {
+            // Class ends, check rules and rebind.
+            $this->currentClass_checkRules();
+            $this->rebind(false, null);
+            return true;
+        }
+
+        return false;
+    }
+
     /////////////////////////////////////////////////////////////////
 
     private array $roles = [];
@@ -298,15 +296,25 @@ final class RoleConventionsSniff implements Sniff {
 
     /////////////////////////////////////////////////////////////////
 
-    private function rebind(File $parser, $newClass = false, $newMethod = false) {
-        $this->parser = $parser;
+    private function rebind($parser = false, $newClass = false, $newMethod = false) {
+        if($parser !== false)
+            $this->parser = $parser;
 
-        if(!$this->currentClass_exists() || $newClass) {
-            $this->currentClass = (object)['start' => 0, 'end' => 0];
+        if($newClass !== false) {
+            if($newClass) {
+                $this->currentClass = (object)[
+                    'start' => $newClass['scope_opener'], 
+                    'end' => $newClass['scope_closer']
+                ];
+            } else {
+                $this->currentClass = null;
+            }
+            
+            $this->currentMethod = null;
             $this->roles = [];
             $this->methods = [];
+
             $this->_ignoreNextRole = false;
-            $this->currentMethod = null;
         }
 
         if($newMethod !== false) {
@@ -326,21 +334,18 @@ final class RoleConventionsSniff implements Sniff {
     public function process(File $file, $stackPtr) {
         $this->rebind($file);
 
-        //if(!file_exists('e:\temp\tokens.json')) file_put_contents('e:\temp\tokens.json', json_encode($tokens, JSON_PRETTY_PRINT));
-
         $tokens = $this->parser_getTokens();
         $current = $tokens[$stackPtr];
-        $type = $current['code'];
 
-        if(!$this->currentClass_checkStart($current, $stackPtr))
+        //if(!file_exists('e:\temp\tokens.json')) file_put_contents('e:\temp\tokens.json', json_encode($tokens, JSON_PRETTY_PRINT));
+        
+        if($this->parser_checkClass($current, $stackPtr))
             return;
-
-        if($this->currentClass_checkEnd($current)) {
-            $this->currentClass_checkRules();
-            $this->rebind($file, true);
+        
+        if(!$this->currentClass_exists())
             return;
-        }
-
+        
+        $type = $current['code'];        
         switch ($type) {
             case T_DOC_COMMENT_TAG:
                 $tag = strtolower($current['content']);
@@ -355,7 +360,8 @@ final class RoleConventionsSniff implements Sniff {
                 $currentMethod = $this->currentMethod_get();
 
                 if($currentMethod && $current['scope_closer'] == $currentMethod->end) {
-                    $this->rebind($file, false, null);
+                    // Method ends, rebind to null
+                    $this->rebind(false, false, null);
                 }
                 break;
             
@@ -364,6 +370,7 @@ final class RoleConventionsSniff implements Sniff {
             case T_PUBLIC:
                 // Check if it's a method
                 if($funcPos = $this->parser_findNext(T_FUNCTION, $stackPtr)) {
+                    // Method found, rebind to it
                     $funcToken = $tokens[$funcPos];
                     
                     $funcNamePos = $this->parser_findNext(T_STRING, $funcPos);
@@ -373,7 +380,7 @@ final class RoleConventionsSniff implements Sniff {
                         $funcName, $funcPos, $funcToken['scope_closer'], $type, $file
                     );
 
-                    $this->rebind($file, false, $newMethod);
+                    $this->rebind(false, false, $newMethod);
                 }
                 // Check if it's a Role definition
                 else if($rolePos = $this->parser_findNext(T_VARIABLE, $stackPtr)) {
@@ -390,6 +397,7 @@ final class RoleConventionsSniff implements Sniff {
                 break;
 
             case T_VARIABLE:
+                // Check if a Role or RoleMethod is referenced.
                 if($current['content'] == '$this' && $callPos = $this->parser_findNext(T_STRING, $stackPtr)) {
                     $isAssignment = null;
                     $assignPos = $callPos;
@@ -398,6 +406,7 @@ final class RoleConventionsSniff implements Sniff {
                         $assignPos++;
                         switch($tokens[$assignPos]['code']) {
                             case T_WHITESPACE:
+                            case T_COMMENT:
                                 break;
                             case "PHPCS_T_EQUAL":
                                 $isAssignment = true;
