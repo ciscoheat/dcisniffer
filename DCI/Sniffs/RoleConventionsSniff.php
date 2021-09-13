@@ -18,7 +18,8 @@ final class RoleConventionsSniff implements Sniff {
         return [
             T_DOC_COMMENT_TAG, T_CLOSE_CURLY_BRACKET, // Context detection
             T_PUBLIC, T_PRIVATE, T_PROTECTED, // Role/RoleMethod access
-            T_VARIABLE // Role assignments
+            T_VARIABLE, // Role assignments
+            T_RETURN // Role leaking
         ];
     }
 
@@ -60,6 +61,14 @@ final class RoleConventionsSniff implements Sniff {
                 $msg = 'Role "%s" does not exist. Add it as "private $%s;" above its RoleMethods.';
                 $data = [$method->role->name, $method->role->name];
                 $this->parser_error($msg, $method->start, 'NoRoleExists', $data);
+            }
+
+            foreach ($method->returns as $return) {
+                if($this->roles_exist($return->property)) {
+                    $msg = 'Role "%s" is leaking through its RoleMethod. Consider using a specific RoleMethod instead.';
+                    $data = [$return->property];
+                    $this->parser_warning($msg, $return->pos, 'RoleLeaking', $data);    
+                }
             }
 
             $assigned = [];
@@ -147,8 +156,12 @@ final class RoleConventionsSniff implements Sniff {
 
     private ?object $currentMethod = null;
 
-    protected function currentMethod_get() {
-        return $this->currentMethod;
+    protected function currentMethod_exists() {
+        return $this->currentMethod !== null;
+    }
+
+    protected function currentMethod_end() {
+        return $this->currentMethod->end ?? 0;
     }
 
     protected function currentMethod_addRoleRef(string $to, int $pos, bool $isAssignment) {
@@ -170,6 +183,17 @@ final class RoleConventionsSniff implements Sniff {
             'pos' => $pos,
             'isRoleMethod' => $isRoleMethod,
             'isAssignment' => $isAssignment
+        ];
+    }
+
+    protected function currentMethod_addReturnProperty(string $propertyName, int $pos) {
+
+        $isRole = !!preg_match($this->roleFormat, $propertyName);
+        if(!$isRole) return;
+
+        $this->currentMethod->returns[] = (object)[
+            'property' => $propertyName,
+            'pos' => $pos
         ];
     }
     
@@ -261,7 +285,8 @@ final class RoleConventionsSniff implements Sniff {
     }
 
     protected function roles_getAll() {
-        return $this->roles;
+        $copy = $this->roles;
+        return $copy;
     }
 
     /////////////////////////////////////////////////////////////////
@@ -273,7 +298,8 @@ final class RoleConventionsSniff implements Sniff {
     }
 
     protected function methods_getAll() {
-        return $this->methods;
+        $copy = $this->methods;
+        return $copy;
     }
 
     protected function methods_add(string $name, int $start, int $end, int $access) {
@@ -287,7 +313,7 @@ final class RoleConventionsSniff implements Sniff {
         
         $base = (object)[
             'name' => $name, 'start' => $start, 'end' => $end, 'access' => $access, 
-            'refs' => [], 
+            'refs' => [], 'returns' => [],
             'role' => $isRoleMethod ? (object)['name' => $matches[1], 'method' => $matches[2]] : null
         ];
 
@@ -357,9 +383,7 @@ final class RoleConventionsSniff implements Sniff {
                 break;
 
             case T_CLOSE_CURLY_BRACKET:
-                $currentMethod = $this->currentMethod_get();
-
-                if($currentMethod && $current['scope_closer'] == $currentMethod->end) {
+                if($this->currentMethod_exists() && $current['scope_closer'] == $this->currentMethod_end()) {
                     // Method ends, rebind to null
                     $this->rebind(false, false, null);
                 }
@@ -421,7 +445,43 @@ final class RoleConventionsSniff implements Sniff {
                     $name = $tokens[$callPos]['content'];
                     $this->currentMethod_addRoleRef($name, $callPos, $isAssignment);
                 }
-                break;    
+                break; 
+                
+            case T_RETURN:
+                $property = null;
+                $returnsRole = null;
+                $nextPos = $stackPtr;
+
+                while($returnsRole === null) {
+                    $nextPos++;
+                    switch($tokens[$nextPos]['code']) {
+                        case T_WHITESPACE:
+                        case T_COMMENT:
+                            break;
+                        case T_VARIABLE:
+                            if($this->parser_tokenAt($nextPos)['content'] == '$this') {
+                                if($varPos = $this->parser_findNext(T_STRING, $nextPos)) {
+                                    $property = [$this->parser_tokenAt($varPos)['content'], $varPos];
+                                    $nextPos = $varPos;
+                                }
+                                else
+                                    $returnsRole = false;
+                            }
+                            break;
+                        case T_SEMICOLON:
+                            $returnsRole = !!$property;
+                            break;
+                        default:
+                            $returnsRole = false;
+                            break;
+                    }
+                }
+
+                if($returnsRole) {
+                    $this->currentMethod_addReturnProperty($property[0], $property[1]);
+                }
+
+                break;
         }
     }
 }
