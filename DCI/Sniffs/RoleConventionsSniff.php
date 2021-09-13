@@ -34,12 +34,172 @@ final class RoleConventionsSniff implements Sniff {
 
     ///// State /////////////////////////////////////////////////////
 
-    private int $_classStart = 0;
-    private int $_classEnd = 0;
-    private ?object $_currentMethod = null;
     private bool $_ignoreNextRole = false;
 
     ///// Roles /////////////////////////////////////////////////////
+
+    private ?object $currentClass = null;
+
+    protected function currentClass_exists() {
+        return $this->currentClass_start() > 0;
+    }
+
+    protected function currentClass_start() {
+        return $this->currentClass->start ?? 0;
+    }
+
+    protected function currentClass_end() {
+        return $this->currentClass->end ?? 0;
+    }
+
+    protected function currentClass_set(int $start, int $end) {
+        $this->currentClass->start = $start;
+        $this->currentClass->end = $end;
+        $this->currentClass->method = null;
+    }
+
+    protected function currentClass_checkStart($token, $stackPtr) {
+        if($token['code'] == T_DOC_COMMENT_TAG && !$this->currentClass_exists()) {
+            $tag = strtolower($token['content']);
+            $tagged = in_array($tag, ['@context', '@dci', '@dcicontext']);
+
+            if($tagged && $classPos = $this->parser_findNext(T_CLASS, $stackPtr)) {
+                $class = $this->tokens_get($classPos);
+                $this->currentClass_set($class['scope_opener'], $class['scope_closer']);
+            }
+        }
+        
+        return $this->currentClass_exists();
+    }
+
+    protected function currentClass_checkEnd($token) {
+        return $this->currentClass_exists() &&
+            $token['code'] == T_CLOSE_CURLY_BRACKET &&
+            $token['scope_closer'] == $this->currentClass_end();
+    }
+
+    protected function currentClass_checkRules() {
+        $assignedOk = 0;
+
+        foreach ($this->methods_getAll() as $method) {
+            if($method->role && !$this->roles_exist($method->role->name)) {
+                $msg = 'Role "%s" does not exist. Add it as "private $%s;" above its RoleMethods.';
+                $data = [$method->role->name, $method->role->name];
+                $this->parser_error($msg, $method->start, 'NoRoleExists', $data);
+            }
+
+            $assigned = [];
+            foreach($method->refs as $ref) {
+                // Check if assignment
+                if($ref->isAssignment) {
+                    if($this->roles_exist($ref->to))
+                        $assigned[$ref->to] = $ref;
+                }
+                else if(!$ref->isRoleMethod) {
+                    // Does it reference a Role directly, or a normal method?
+                    if($this->roles_exist($ref->to)) {
+                        // References a Role directly, allowed only if in one of its RoleMethods
+                        if(!$method->role || $method->role->name != $ref->to) {
+                            $msg = 'Role "%s" accessed outside its RoleMethods';
+                            $data = [$ref->to];
+                            $this->parser_error($msg, $ref->pos, 'RoleAccessedOutsideItsMethods', $data);
+                        }
+                    }
+                } else {
+                    // References a RoleMethod, check access
+                    $roleMethod = $this->methods_get($ref->to);
+                    $roleName = $roleMethod->role->name;
+                    $roleMethodName = $roleMethod->role->method;
+
+                    if(!$this->roles_exist($roleName)) {
+                        $msg = 'Role "%s" does not exist. Add it as "private $%s;" above its RoleMethods.';
+                        $data = [$roleName, $roleName];
+                        $this->parser_error($msg, $roleMethod->start, 'NoRoleExists', $data);
+                    } else {
+                        // Add RoleMethod to the Role, will be looped through
+                        // after the current loop to check RoleMethod positions.
+                        $this->roles_get($roleName)->methods[$roleMethodName] = $roleMethod;
+                        
+                        if((!$method->role || $method->role->name != $roleName) && $roleMethod->access == T_PRIVATE) {
+                            $msg = 'Private RoleMethod "%s->%s" accessed outside its own RoleMethods here.';
+                            $data = [$roleName, $roleMethodName];
+                            $this->parser_error($msg, $ref->pos, 'InvalidRoleMethodAccess', $data);
+                            
+                            $msg = 'Private RoleMethod "%s->%s" accessed outside its own RoleMethods. Make it protected if this is intended.';
+                            $data = [$roleName, $roleMethodName];
+                            $this->parser_error($msg, $roleMethod->start, 'AdjustRoleMethodAccess', $data);
+                        }
+                    }    
+                }
+            }
+
+            if(count($assigned) > 0) {
+                if($assignedOk) {
+                    foreach ($assigned as $ref) {                        
+                        $msg = 'All Roles must be bound inside a single method. Move this assignment to the other method.';
+                        $this->parser_error($msg, $ref->pos, 'RoleNotBoundInSingleMethod');
+
+                        $msg = 'Method where roles are currently bound.';
+                        $this->parser_error($msg, $assignedOk, 'RoleNotBoundInSingleMethod');
+                    }
+                }
+                else if(count($assigned) < count($this->roles_getAll())) {
+                    $missing = array_diff($this->roles_getNames(), array_keys($assigned));
+                    $msg = 'All Roles must be bound inside a single method. Missing: %s';
+                    $data = [join(", ", $missing)];
+                    $this->parser_error($msg, $method->start, 'RolesNotBoundInSingleMethod', $data);
+                } else {
+                    $assignedOk = $method->start;
+                }
+            }
+        }
+        
+        $roles = array_values($this->roles_getAll());
+        foreach($roles as $key => $role) {
+            $start = $role->pos;
+            $end = $roles[$key + 1]->pos ?? PHP_INT_MAX;
+
+            foreach($role->methods as $name => $method) {
+                if($method->start < $start || $method->start > $end) {
+                    $msg = 'RoleMethod "%s->%s" is not positioned below its Role.';
+                    $data = $method->role;
+                    $this->parser_error($msg, $method->start, 'RoleMethodPosition', $data);
+                }
+            }
+        }
+    }
+
+    /////////////////////////////////////////////////////////////////
+
+    private ?object $currentMethod = null;
+
+    protected function currentMethod_get() {
+        return $this->currentMethod;
+    }
+
+    protected function currentMethod_addRoleRef(string $to, int $pos, bool $isAssignment) {
+
+        $isRoleMethod = !!preg_match($this->roleMethodFormat, $to);
+        $isRole = !$isRoleMethod && !!preg_match($this->roleFormat, $to);
+
+        if(!$isRole && !$isRoleMethod) return;
+
+        if($isRoleMethod && $isAssignment) {
+            $msg = 'Cannot assign to a RoleMethod.';
+            $this->parser_error($msg, $pos, 'RoleMethodAssignment');
+            return;
+        }
+
+        $this->currentMethod->refs[] = (object)[
+            //'from' => $method,
+            'to' => $to,
+            'pos' => $pos,
+            'isRoleMethod' => $isRoleMethod,
+            'isAssignment' => $isAssignment
+        ];
+    }
+    
+    /////////////////////////////////////////////////////////////////
 
     private File $parser;
 
@@ -140,161 +300,22 @@ final class RoleConventionsSniff implements Sniff {
         return $this->methods[$name] = $base;
     }
 
-    protected function methods_addRoleRef(object $method, string $to, int $pos, bool $isAssignment) {
-
-        $isRoleMethod = !!preg_match($this->roleMethodFormat, $to);
-        $isRole = !$isRoleMethod && !!preg_match($this->roleFormat, $to);
-
-        if(!$isRole && !$isRoleMethod) return;
-
-        if($isRoleMethod && $isAssignment) {
-            $msg = 'Cannot assign to a RoleMethod.';
-            $this->parser_error($msg, $pos, 'RoleMethodAssignment');
-            return;
-        }
-
-        $method->refs[] = (object)[
-            //'from' => $method,
-            'to' => $to,
-            'pos' => $pos,
-            'isRoleMethod' => $isRoleMethod,
-            'isAssignment' => $isAssignment
-        ];
-    }
-
     /////////////////////////////////////////////////////////////////
 
-    private function checkRules() {
-        $assignedOk = 0;
-
-        foreach ($this->methods_getAll() as $method) {
-            if($method->role && !$this->roles_exist($method->role->name)) {
-                $msg = 'Role "%s" does not exist. Add it as "private $%s;" above its RoleMethods.';
-                $data = [$method->role->name, $method->role->name];
-                $this->parser_error($msg, $method->start, 'NoRoleExists', $data);
-            }
-
-            $assigned = [];
-            foreach($method->refs as $ref) {
-                // Check if assignment
-                if($ref->isAssignment) {
-                    if($this->roles_exist($ref->to))
-                        $assigned[$ref->to] = $ref;
-                }
-                else if(!$ref->isRoleMethod) {
-                    // Does it reference a Role directly, or a normal method?
-                    if($this->roles_exist($ref->to)) {
-                        // References a Role directly, allowed only if in one of its RoleMethods
-                        if(!$method->role || $method->role->name != $ref->to) {
-                            $msg = 'Role "%s" accessed outside its RoleMethods';
-                            $data = [$ref->to];
-                            $this->parser_error($msg, $ref->pos, 'RoleAccessedOutsideItsMethods', $data);
-                        }
-                    }
-                } else {
-                    // References a RoleMethod, check access
-                    $roleMethod = $this->methods_get($ref->to);
-                    $roleName = $roleMethod->role->name;
-                    $roleMethodName = $roleMethod->role->method;
-
-                    if(!$this->roles_exist($roleName)) {
-                        $msg = 'Role "%s" does not exist. Add it as "private $%s;" above its RoleMethods.';
-                        $data = [$roleName, $roleName];
-                        $this->parser_error($msg, $roleMethod->start, 'NoRoleExists', $data);
-                    } else {
-                        // Add RoleMethod to the Role, will be looped through
-                        // after the current loop to check RoleMethod positions.
-                        $this->roles_get($roleName)->methods[$roleMethodName] = $roleMethod;
-                        
-                        if((!$method->role || $method->role->name != $roleName) && $roleMethod->access == T_PRIVATE) {
-                            $msg = 'Private RoleMethod "%s->%s" accessed outside its own RoleMethods here.';
-                            $data = [$roleName, $roleMethodName];
-                            $this->parser_error($msg, $ref->pos, 'InvalidRoleMethodAccess', $data);
-                            
-                            $msg = 'Private RoleMethod "%s->%s" accessed outside its own RoleMethods. Make it protected if this is intended.';
-                            $data = [$roleName, $roleMethodName];
-                            $this->parser_error($msg, $roleMethod->start, 'AdjustRoleMethodAccess', $data);
-                        }
-                    }    
-                }
-            }
-
-            if(count($assigned) > 0) {
-                if($assignedOk) {
-                    foreach ($assigned as $ref) {                        
-                        $msg = 'All Roles must be bound inside a single method. Move this assignment to the other method.';
-                        $this->parser_error($msg, $ref->pos, 'RoleNotBoundInSingleMethod');
-
-                        $msg = 'Method where roles are currently bound.';
-                        $this->parser_error($msg, $assignedOk, 'RoleNotBoundInSingleMethod');
-                    }
-                }
-                else if(count($assigned) < count($this->roles_getAll())) {
-                    $missing = array_diff($this->roles_getNames(), array_keys($assigned));
-                    $msg = 'All Roles must be bound inside a single method. Missing: %s';
-                    $data = [join(", ", $missing)];
-                    $this->parser_error($msg, $method->start, 'RolesNotBoundInSingleMethod', $data);
-                } else {
-                    $assignedOk = $method->start;
-                }
-            }
-        }
-        
-        $roles = array_values($this->roles_getAll());
-        foreach($roles as $key => $role) {
-            $start = $role->pos;
-            $end = $roles[$key + 1]->pos ?? PHP_INT_MAX;
-
-            foreach($role->methods as $name => $method) {
-                if($method->start < $start || $method->start > $end) {
-                    $msg = 'RoleMethod "%s->%s" is not positioned below its Role.';
-                    $data = $method->role;
-                    $this->parser_error($msg, $method->start, 'RoleMethodPosition', $data);
-                }
-            }
-        }
-    }
-
-    private function checkClassStart($token, $stackPtr) {
-        // Check if class should be parsed
-        if($token['code'] == T_DOC_COMMENT_TAG && $this->_classStart == 0) {
-            $tag = strtolower($token['content']);
-            $tagged = in_array($tag, ['@context', '@dci', '@dcicontext']);
-
-            if(
-                $tagged &&
-                $classPos = $this->parser_findNext(T_CLASS, $stackPtr)
-            ) {
-                $class = $this->tokens_get($classPos);
-
-                $this->_classStart = $class['scope_opener'];
-                $this->_classEnd = $class['scope_closer'];
-            }
-        }
-        
-        return $this->_classStart > 0;
-    }
-
-    private function checkClassEnd($token) {
-        return $this->_classStart > 0 &&
-            $token['code'] == T_CLOSE_CURLY_BRACKET &&
-            $token['scope_closer'] == $this->_classEnd;
-    }
-
-    private function resetState() {
-        $this->_classStart = 0;
-        $this->_classEnd = 0;
-        $this->_currentMethod = null;
-        $this->_ignoreNextRole = false;
-    }
-
-    private function rebind(File $parser, $newClass = false) {
+    private function rebind(File $parser, $newClass = false, $newMethod = false) {
         $this->parser = $parser;
         $this->tokens = $parser->getTokens();
 
-        if($newClass) {
+        if(!$this->currentClass_exists() || $newClass) {
+            $this->currentClass = (object)['start' => 0, 'end' => 0];
             $this->roles = [];
             $this->methods = [];
+            $this->_ignoreNextRole = false;
+            $this->currentMethod = null;
+        }
+
+        if($newMethod !== false) {
+            $this->currentMethod = $newMethod;
         }
     }
 
@@ -316,12 +337,11 @@ final class RoleConventionsSniff implements Sniff {
         $current = $tokens[$stackPtr];
         $type = $current['code'];
 
-        if(!$this->checkClassStart($current, $stackPtr))
+        if(!$this->currentClass_checkStart($current, $stackPtr))
             return;
 
-        if($this->checkClassEnd($current)) {
-            $this->checkRules();
-            $this->resetState();
+        if($this->currentClass_checkEnd($current)) {
+            $this->currentClass_checkRules();
             $this->rebind($file, true);
             return;
         }
@@ -337,9 +357,10 @@ final class RoleConventionsSniff implements Sniff {
                 break;
 
             case T_CLOSE_CURLY_BRACKET:
-                if($this->_currentMethod && $current['scope_closer'] == $this->_currentMethod->end) {
-                    // RoleMethod ended.
-                    $this->_currentMethod = null;
+                $currentMethod = $this->currentMethod_get();
+
+                if($currentMethod && $current['scope_closer'] == $currentMethod->end) {
+                    $this->rebind($file, false, null);
                 }
                 break;
             
@@ -353,9 +374,11 @@ final class RoleConventionsSniff implements Sniff {
                     $funcNamePos = $this->parser_findNext(T_STRING, $funcPos);
                     $funcName = $tokens[$funcNamePos]['content'];
     
-                    $this->_currentMethod = $this->methods_add(
+                    $newMethod = $this->methods_add(
                         $funcName, $funcPos, $funcToken['scope_closer'], $type, $file
                     );
+
+                    $this->rebind($file, false, $newMethod);
                 }
                 // Check if it's a Role definition
                 else if($rolePos = $this->parser_findNext(T_VARIABLE, $stackPtr)) {
@@ -375,7 +398,8 @@ final class RoleConventionsSniff implements Sniff {
                 if($current['content'] == '$this' && $callPos = $this->parser_findNext(T_STRING, $stackPtr)) {
                     $isAssignment = null;
                     $assignPos = $callPos;
-                    do {
+
+                    while($isAssignment === null) {
                         $assignPos++;
                         switch($tokens[$assignPos]['code']) {
                             case T_WHITESPACE:
@@ -388,10 +412,10 @@ final class RoleConventionsSniff implements Sniff {
                                 break;
                         }
 
-                    } while($isAssignment === null);
+                    }
 
                     $name = $tokens[$callPos]['content'];
-                    $this->methods_addRoleRef($this->_currentMethod, $name, $callPos, $isAssignment);
+                    $this->currentMethod_addRoleRef($name, $callPos, $isAssignment);
                 }
                 break;    
         }
