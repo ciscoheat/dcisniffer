@@ -28,15 +28,15 @@ final class MoneyTransfer {
 
 ## Basic conventions
 
-Roles are implemented as private properties: `private $source;`. They cannot contain underscore.
+Roles are created as private properties: `private $source;`. They cannot contain underscore.
 
-RoleMethods are then added below the Roles as methods: `protected source_decreaseBalance($amount) {`. They always starts with the Role name, then any number of underscores, then the method name.
+RoleMethods are then added below the Roles as methods: `protected source_decreaseBalance($amount)`. They always start with the Role name, then any number of underscores, then the method name.
 
 A Role can only be accessed within its RoleMethods, which also goes for `private` RoleMethods.
 
 As usual, Roles must all be bound (assigned) within the same method.
 
-The [RoleConventionsSniff](https://github.com/ciscoheat/dcisniffer/blob/master/DCI/Sniffs/RoleConventionsSniff.php) sniff file is written as a DCI Context, albeit at bit contrieved since the pattern used for parsing makes it a bit difficult to handle rebinding.
+The [RoleConventionsSniff](https://github.com/ciscoheat/dcisniffer/blob/master/DCI/Sniffs/RoleConventionsSniff.php) file is written as a DCI Context, albeit at bit contrieved since the pattern used for parsing makes it a bit difficult to handle rebinding.
 
 ## MoneyTransfer tutorial
 
