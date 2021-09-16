@@ -15,7 +15,7 @@ VS Code or any other IDE is optional but recommended, since you get immediate fe
 
 ## Enabling the conventions for a PHP class
 
-Now there is only one thing you need to do to enable the conventions, which is to mark the classes you wish to check in a docblock with `@context`:
+Now there is only one thing you need to do to enable the conventions, which is to mark the classes you wish to check in a docblock with `@context` or `@DCIContext`:
 
 ```php
 /**
@@ -28,13 +28,13 @@ final class MoneyTransfer {
 
 ## Basic conventions
 
-Roles are created as private properties: `private $source;`. They cannot contain underscore.
+**Naming:** Roles are created as private properties: `private $source;`. They must be in `camelCase` or `ProperCase` format, and cannot contain underscore.
 
-RoleMethods are then added below the Roles as methods: `protected source_decreaseBalance($amount)`. They always start with the Role name, then any number of underscores, then the method name.
+RoleMethods are then added below the Roles as methods: `protected source_decreaseBalance($amount)`. They always start with the Role name, then any number of underscores, then the method name, in the same format as the Role.
 
-A Role can only be accessed within its RoleMethods, which also goes for `private` RoleMethods.
+**Access:** A Role can only be accessed within its RoleMethods, which also goes for `private` RoleMethods.
 
-As usual, Roles must all be bound (assigned) within the same method.
+**Assignment:** Roles must all be bound (assigned) within the same method.
 
 The [RoleConventionsSniff](https://github.com/ciscoheat/dcisniffer/blob/master/DCI/Sniffs/RoleConventionsSniff.php) file is written as a DCI Context, albeit at bit contrieved since the pattern used for parsing makes it a bit difficult to handle rebinding.
 
