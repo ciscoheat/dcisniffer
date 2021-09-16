@@ -4,6 +4,7 @@ namespace PHP_CodeSniffer\Standards\DCI\Sniffs;
 
 use PHP_CodeSniffer\Sniffs\Sniff;
 use PHP_CodeSniffer\Files\File;
+use PHP_CodeSniffer\Util\Tokens;
 
 /**
  * @context
@@ -422,9 +423,9 @@ final class RoleConventionsSniff implements Sniff {
 
             case T_VARIABLE:
                 // Check if a Role or RoleMethod is referenced.
-                if($current['content'] == '$this' && $callPos = $this->parser_findNext(T_STRING, $stackPtr)) {
+                if($current['content'] == '$this' && $varPos = $this->parser_findNext(T_STRING, $stackPtr)) {
                     $isAssignment = null;
-                    $assignPos = $callPos;
+                    $assignPos = $varPos;
 
                     while($isAssignment === null) {
                         $assignPos++;
@@ -432,18 +433,16 @@ final class RoleConventionsSniff implements Sniff {
                             case T_WHITESPACE:
                             case T_COMMENT:
                                 break;
-                            case "PHPCS_T_EQUAL":
-                                $isAssignment = true;
-                                break;
                             default:
-                                $isAssignment = false;
+                                $token = $tokens[$assignPos]['code'];
+                                $isAssignment = !!(Tokens::$assignmentTokens[$token] ?? false);
                                 break;
                         }
 
                     }
 
-                    $name = $tokens[$callPos]['content'];
-                    $this->currentMethod_addRoleRef($name, $callPos, $isAssignment);
+                    $name = $tokens[$varPos]['content'];
+                    $this->currentMethod_addRoleRef($name, $varPos, $isAssignment);
                 }
                 break; 
                 
