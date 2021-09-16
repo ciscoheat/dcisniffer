@@ -44,13 +44,13 @@ Let's start with a simple data class called Account, containing just a few simpl
 
 ```php
 class Account {
-	private string $_name;
-	private int $_balance;
+    private string $_name;
+    private int $_balance;
 
-	public function __construct($name, $balance) {
+    public function __construct($name, $balance) {
         $this->_name = $name;
         $this->_balance = $balance;
-	}
+    }
 
     public function balance() {
         return $this->_balance;
@@ -60,13 +60,13 @@ class Account {
         return $this->_name;
     }
 
-	public function increaseBalance(int $amount) {
-		$this->_balance += $amount;
-	}
+    public function increaseBalance(int $amount) {
+        $this->_balance += $amount;
+    }
 
-	public function decreaseBalance(int $amount) {
-		$this->_balance -= $amount;
-	}
+    public function decreaseBalance(int $amount) {
+        $this->_balance -= $amount;
+    }
 }
 ```
 
@@ -143,10 +143,10 @@ Getting back to the mental model again, we know that we want to *"Withdraw amoun
 ```php
     private Source $source;
 
-	protected function source_withdraw() {
-		$this->source->decreaseBalance($this->amount);
-		$this->destination_deposit();
-	}
+    protected function source_withdraw() {
+        $this->source->decreaseBalance($this->amount);
+        $this->destination_deposit();
+    }
 }
 ```
 
@@ -157,9 +157,9 @@ Note how we're using the contract method only for the actual data operation, the
 ```php
     private Destination $destination;
 
-	protected function destination_deposit() {
-		$this->destination->increaseBalance($this->amount);
-	}
+    protected function destination_deposit() {
+        $this->destination->increaseBalance($this->amount);
+    }
 }
 ```
 
@@ -184,10 +184,10 @@ RoleMethods must be declared `protected` to allow access outside their correspon
 ```php
 final class MoneyTransfer {
     public function __construct($source, $destination, $amount) {
-		$this->source = $source;
-		$this->destination = $destination;
-		$this->_amount = $amount;
-	}
+        $this->source = $source;
+        $this->destination = $destination;
+        $this->_amount = $amount;
+    }
 }
 ```
 
@@ -208,10 +208,10 @@ If you're basing the Context on a use case, there is usually only one System Ope
 
 ```php
 final class MoneyTransfer {
-	// System Operation
-	public function transfer() {
-		$this->source_withdraw();
-	}
+    // System Operation
+    public function transfer() {
+        $this->source_withdraw();
+    }
 }
 ```
 
@@ -237,10 +237,10 @@ interface Destination {
  */
 final class MoneyTransfer {
     public function __construct($source, $destination, $amount) {
-		$this->source = $source;
-		$this->destination = $destination;
-		$this->_amount = $amount;
-	}
+        $this->source = $source;
+        $this->destination = $destination;
+        $this->_amount = $amount;
+    }
 
     public function transfer() {
         $this->source_withdraw();
@@ -252,18 +252,18 @@ final class MoneyTransfer {
 
     private Source $source;
 
-	protected function source_withdraw() {
-		$this->source->decreaseBalance($this->_amount);
-		$this->destination_deposit();
-	}
+    protected function source_withdraw() {
+        $this->source->decreaseBalance($this->_amount);
+        $this->destination_deposit();
+    }
 
     /////////////////////////////////////////////////////////////////
 
-	private Destination $destination;
+    private Destination $destination;
 
-	protected function destination_deposit() {
-		$this->destination->increaseBalance($this->_amount);
-	}
+    protected function destination_deposit() {
+        $this->destination->increaseBalance($this->_amount);
+    }
 }
 
 ///// Data //////////////////////////////////////////////////////////
@@ -271,13 +271,13 @@ final class MoneyTransfer {
 class Account
 implements Source, Destination
 {
-	private string $_name;
-	private int $_balance;
+    private string $_name;
+    private int $_balance;
 
-	public function __construct($name, $balance) {
+    public function __construct($name, $balance) {
         $this->_name = $name;
         $this->_balance = $balance;
-	}
+    }
 
     public function balance() {
         return $this->_balance;
@@ -287,13 +287,13 @@ implements Source, Destination
         return $this->_name;
     }
 
-	public function increaseBalance(int $amount) {
-		$this->_balance += $amount;
-	}
+    public function increaseBalance(int $amount) {
+        $this->_balance += $amount;
+    }
 
-	public function decreaseBalance(int $amount) {
-		$this->_balance -= $amount;
-	}
+    public function decreaseBalance(int $amount) {
+        $this->_balance -= $amount;
+    }
 }
 
 ///// Entrypoint ////////////////////////////////////////////////////
