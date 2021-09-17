@@ -28,19 +28,61 @@ final final class MoneyTransfer {
 
 # Basic conventions
 
-**Naming:** Roles are created as private properties: `private $source;`. They must be in `camelCase` or `ProperCase` format, and cannot contain underscore.
+**Naming:** Roles are created as private properties: `private $source`. As default they must be in `camelCase` or `ProperCase` format and cannot contain underscore. By prefixing/suffixing a property with underscore however, it will not be treated as a Role but as a normal class property.
 
-RoleMethods are then added below the Roles as methods: `protected source_decreaseBalance($amount)`. They always start with the Role name, then any number of underscores, then the method name, in the same format as the Role.
+RoleMethods are added below the Roles as methods: `protected function source_decreaseBalance(int $amount)`. They always start with the Role name, then any number of underscores, then the method name, in the same format as the Role. Methods without underscores are treated as normal class methods.
 
-**Access:** A Role can only be accessed within its RoleMethods, which also goes for `private` RoleMethods.
+**Access:** A Role can only be accessed within its RoleMethods, and it's accessor must always be `private`. A RoleMethod can be accessed from other parts of the Context when it's `protected`, but if it's `private`, only within its other RoleMethods:
 
-**Assignment:** Roles must all be bound (assigned) within the same method.
+```php
+private $source;
+
+// Accessed from anywhere in the Context, since it's protected
+protected function source_decreaseBalance(int $amount) {
+    ...
+}
+
+// Can only be accessed from RoleMethods belonging to the 'source' Role
+private function source_checkBalance() {
+    ...
+}
+```
+
+**Assignment:** Roles must all be assigned (bound) within a single method, which commonly is the constructor, but can be moved to another method if needed. See the tutorial further down for more information.
+
+## Naming configuration
+
+By creating your own code standard xml file, you can modify the format of the Roles and RoleMethods. They are configured by two properties, `roleFormat` and `roleMethodFormat`. They both contain a regexp used to extract the name of the Role and its method. Create a `phpcs.xml` file in your project directory:
+
+**phpcs.xml**
+
+```xml
+<?xml version="1.0"?>
+<ruleset name="YourStandard">
+    <description>Your custom rules.</description>
+    <rule ref="/path/to/dcisniffer/DCI" />
+    <rule ref="/path/to/dcisniffer/DCI/Sniffs/RoleConventionsSniff.php">
+        <properties>
+           <property name="roleFormat" value="/^([a-z]\w+[a-zA-Z0-9])$/" />
+           <property name="roleMethodFormat" value="/^([a-z]\w+[a-zA-Z0-9])__(\w+)$/" />
+        </properties>
+    </rule>
+</ruleset>
+```
+
+This configuration makes the naming adhere to another common PHP standard, using underscores instead of camelCase. Two underscores are then separating the Role name from the method:
+
+`current_method` - Now a valid Role.
+
+`current_method__add_role_ref` - With a RoleMethod called `add_role_ref`.
+
+Note that each name in the regexp must be enclosed with parenthesis.
 
 # DCI Tutorial
 
 An ATM money transfer will be our simple DCI example and tutorial.
 
-Let's start with a simple data class called Account, containing just a few simple methods:
+Let's start with a simple data class called `Account`:
 
 ```php
 class Account {
@@ -70,7 +112,7 @@ class Account {
 }
 ```
 
-This is what we in DCI sometimes call a "dumb" data class. It only "knows" about its own data and trivial ways to manipulate it. The concept of a transfer between two accounts is outside its responsibilities and we delegate this to a Context - the `MoneyTransfer` Context class. In this way we can keep the Account class very slim and avoid that it gradually takes on more and more responsibilities for each use case it participates in.
+This is what we in DCI sometimes call a "dumb" data class. It only "knows" about its own data and trivial ways to manipulate it. The concept of a *transfer* between two accounts is outside its responsibilities and we delegate this to a Context - the `MoneyTransfer` Context class. In this way we can keep the Account class very slim and avoid that it gradually takes on more and more responsibilities for each use case it participates in.
 
 From a users point of view we might think of a money transfer as
 
@@ -98,7 +140,7 @@ final class MoneyTransfer {
 }
 ```
 
-A DCI Context must be final, since inheritance and polymorphism is part of the previous paradigm, class-oriented thinking, which may have its place within the system, but a Context represents a runtime behaviour of a specific use case, and should not be confused with static hierarchy and structure.
+A DCI Context must be final, since inheritance and polymorphism is part of the previous paradigm, OOP which is actually class-oriented thinking. It may have its place within the system, but a Context represents runtime behaviour of a specific use case, and should not be confused with static hierarchy and structure.
 
 Let's introduce Roles now. Remember the mental model of a money transfer? "Withdraw *amount* from a *source* account and deposit the amount in a *destination* account". The three italicized nouns are the Roles that we will use in the Context. They are defined using private properties:
 
@@ -116,9 +158,9 @@ In DCI, the type of a Role is called its **RoleObjectContract**, or just **contr
 
 The common thinking is to use the already defined classes. The source and destination Roles could be an `Account`.
 
-We're not interested in the whole `Account` however, that is the old, class-oriented thinking. We want to focus on what happens in the Context right now for a specific Role, so all we need for an object to play the *source* Role is a way of decreasing the balance. 
+We're not interested in the whole `Account` however, that is the old, class-oriented thinking. We want to focus on what happens in the Context right now for a specific Role, so all we need for an object to play the *source* Role is a way of decreasing the balance.
 
-In PHP you could use an interface for this, representing artefacts that makes sense to a user in a context. Let's define a `Source` interface:
+In PHP you could use an interface for this, representing an artefact that makes sense to a user in a Context. Let's define a `Source` interface:
 
 ```php
 interface Source {
@@ -150,7 +192,7 @@ Getting back to the mental model again, we know that we want to *"Withdraw amoun
 }
 ```
 
-The *withdraw* RoleMethod, created as a function with a body, as opposed to contracts which has no body, is a very close mapping of the mental model to code, which is the goal of DCI. 
+The *withdraw* RoleMethod is a very close mapping of the mental model to code, which is the goal of DCI.
 
 Note how we're using the contract method only for the actual data operation, the rest is functionality, collaboration between Roles through RoleMethods. This collaboration requires a RoleMethod on destination called `deposit`, according to the mental model. Let's define it:
 
@@ -165,9 +207,10 @@ Note how we're using the contract method only for the actual data operation, the
 
 ### The amount Role
 
-The amount role is special. We're using an `int` in this example, which lack of interfaceability (especially in PHP) means it's not well suited for a Role, as with most basic types. Instead we can make it an ordinary var or pass it as a parameter. Let's use a var in this case.
+The amount role is special. We're using an `int` in this example, which lack of interfaceability (especially in PHP) means it's not well suited for a Role, as with most basic types. Instead we can make it an ordinary property or pass it as a parameter. Let's use a property in this case.
 
 ```php
+// Change the property name to:
 private int $_amount;
 ```
 
@@ -177,9 +220,9 @@ We need an underscore in the name so the DCI library won't mistake it for a Role
 
 ### Role field access
 
-RoleMethods must be declared `protected` to allow access outside their corresponding Role. Contract fields should only be accessed from the Role's own RoleMethods however. This enables the ability to trace the flow of cooperation between Roles, instead of any Role being able to call another Role's underlying object at all times. It's a helpful separation between the local reasoning of how Roles interact locally with their object, and how Roles interact with each other. A goal with DCI is readability, and this helps reading and understanding the use-case-level logic of a Context.
+RoleMethods must be declared `protected` to allow access outside their corresponding Role. Roles should only be accessed within its own RoleMethods however. This enables the ability to trace the flow of cooperation between Roles, instead of any Role being able to call another Roles' underlying object at all times. It's a helpful separation between the local reasoning of how Roles interact locally with their object, and how Roles interact with each other. A goal with DCI is readability, and this helps reading and understanding the use-case-level logic of a Context.
 
-### Adding a constructor
+### Adding a constructor - Role binding
 
 ```php
 final class MoneyTransfer {
@@ -191,18 +234,18 @@ final class MoneyTransfer {
 }
 ```
 
-There's nothing special about the constructor, just assign the Roles as normal instance variables. This is called *Role-binding*, and there are two important things to remember about it:
+There's nothing special about the constructor, just assign the Roles as normal instance variables. This assignment is called *Role-binding*, and there are two important things to remember about it:
 
 1. All Roles *must* be bound in the same function.
 1. A Role *should not* be left unbound (it can be bound to `null` however).
 
-Rebinding individual Roles during executing complicates things, and is hardly supported by any mental model. So put the binding in one place only, you can factorize it out of the constructor to a separate method if you want. The Roles can be rebound before another Interaction in the same Context occurs, which can be useful during recursion for example, but it must always happen in the same function.
+Rebinding individual Roles during executing complicates things, and is hardly supported by any mental model. So put the binding in one place only, you can factorize it out of the constructor to a separate method if you want. The Roles can be rebound before another Interaction in the same Context occurs, which can be useful during recursion for example.
 
 ### System Operations
 
-We just mentioned interactions, which is the last part of the DCI acronym. An **Interaction** is a flow of messages through the Roles in a Context, like the one we have defined now, based on the mental model. To start an Interaction we need an entrypoint for the Context, a public method in other words. This is called a **System Operation**, and all it should do is to call a RoleMethod, so the Roles start interacting with each other.
+We just mentioned Interactions, which is the last part of the DCI acronym. An **Interaction** is a flow of messages through the Roles in a Context, like the one we have defined now, based on the mental model. To start an Interaction we need an entrypoint for the Context, a public method in other words. This is called a **System Operation**, and it should usually just call a RoleMethod, so the Roles start interacting with each other.
 
-If you're basing the Context on a use case, there is usually only one System Operation in a Context. Let's call it `transfer`. Try not to use a generic name like "execute", instead give your API meaning by letting every method name carry meaningful information.
+If you're basing the Context on a use case, there is usually only one System Operation in a Context. Let's call it `transfer`. Try not to use a generic name like "execute" or "run", instead give your API meaning by letting every method name carry meaningful information.
 
 **MoneyTransfer.hx**
 
@@ -344,7 +387,7 @@ Some cases don’t lend themselves very well to use cases but are better modeled
 
 # Larger examples
 
-- The [RoleConventionsSniff](https://github.com/ciscoheat/dcisniffer/blob/master/DCI/Sniffs/RoleConventionsSniff.php) file is written as a DCI Context, albeit at bit contrieved since the pattern used for parsing makes it a bit difficult to handle rebinding.
+- The [RoleConventionsSniff](https://github.com/ciscoheat/dcisniffer/blob/master/DCI/Sniffs/RoleConventionsSniff.php) file is written as a DCI Context, unfortunately a bit contrieved since the pattern used for parsing makes it a bit difficult to handle rebinding.
 
 # DCI Resources
 
@@ -361,7 +404,5 @@ FAQ - [DCI FAQ](http://fulloo.info/doku.php?id=faq) <br>
 Support - [stackoverflow](http://stackoverflow.com/questions/tagged/dci), tagging the question with **dci** <br>
 Discussions - [Object-composition](https://groups.google.com/forum/?fromgroups#!forum/object-composition) <br>
 Wikipedia - [DCI entry](http://en.wikipedia.org/wiki/Data,_Context,_and_Interaction)
-
-[![Build Status](https://travis-ci.org/ciscoheat/haxedci.svg?branch=master)](https://travis-ci.org/ciscoheat/haxedci)
 
 The MoneyTransfer tutorial is converted from the [haxedci](https://github.com/ciscoheat/haxedci) DCI library.
