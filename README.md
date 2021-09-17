@@ -387,7 +387,7 @@ Some cases don’t lend themselves very well to use cases but are better modeled
 
 # Larger examples
 
-- The [RoleConventionsSniff](https://github.com/ciscoheat/dcisniffer/blob/master/DCI/Sniffs/RoleConventionsSniff.php) file is written as a DCI Context, unfortunately a bit contrieved since the pattern used for parsing makes it a bit difficult to handle rebinding.
+- The [RoleConventionsSniff](https://github.com/ciscoheat/dcisniffer/blob/master/DCI/Sniffs/RoleConventionsSniff.php) file is written as a DCI Context, unfortunately a bit contrived since the pattern used for parsing makes it a bit difficult to handle rebinding.
 
 # DCI Resources
 
