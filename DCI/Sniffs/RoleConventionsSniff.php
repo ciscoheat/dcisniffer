@@ -92,28 +92,35 @@ final class RoleConventionsSniff implements Sniff {
                 } else {
                     // References a RoleMethod, check access
                     $roleMethod = $this->methods_get($ref->to);
-                    $roleName = $roleMethod->role->name;
-                    $roleMethodName = $roleMethod->role->method;
 
-                    if(!$this->roles_exist($roleName)) {
-                        $msg = 'Role "%s" does not exist. Add it as "private $%s;" above its RoleMethods.';
-                        $data = [$roleName, $roleName];
-                        $this->parser_error($msg, $roleMethod->start, 'NoRoleExists', $data);
+                    if(!$roleMethod) {
+                        $msg = 'RoleMethod "%s" does not exist.';
+                        $data = [$ref->to];
+                        $this->parser_error($msg, $ref->pos, 'NoMethodExists', $data);
                     } else {
-                        // Add RoleMethod to the Role, will be looped through
-                        // after the current loop to check RoleMethod positions.
-                        $this->roles_get($roleName)->methods[$roleMethodName] = $roleMethod;
-                        
-                        if((!$method->role || $method->role->name != $roleName) && $roleMethod->access == T_PRIVATE) {
-                            $msg = 'Private RoleMethod "%s->%s" accessed outside its own RoleMethods here.';
-                            $data = [$roleName, $roleMethodName];
-                            $this->parser_error($msg, $ref->pos, 'InvalidRoleMethodAccess', $data);
+                        $roleName = $roleMethod->role->name;
+                        $roleMethodName = $roleMethod->role->method;
+
+                        if(!$this->roles_exist($roleName)) {
+                            $msg = 'Role "%s" does not exist. Add it as "private $%s;" above its RoleMethods.';
+                            $data = [$roleName, $roleName];
+                            $this->parser_error($msg, $roleMethod->start, 'NoRoleExists', $data);
+                        } else {
+                            // Add RoleMethod to the Role, will be looped through
+                            // after the current loop to check RoleMethod positions.
+                            $this->roles_get($roleName)->methods[$roleMethodName] = $roleMethod;
                             
-                            $msg = 'Private RoleMethod "%s->%s" accessed outside its own RoleMethods. Make it protected if this is intended.';
-                            $data = [$roleName, $roleMethodName];
-                            $this->parser_error($msg, $roleMethod->start, 'AdjustRoleMethodAccess', $data);
+                            if((!$method->role || $method->role->name != $roleName) && $roleMethod->access == T_PRIVATE) {
+                                $msg = 'Private RoleMethod "%s->%s" accessed outside its own RoleMethods here.';
+                                $data = [$roleName, $roleMethodName];
+                                $this->parser_error($msg, $ref->pos, 'InvalidRoleMethodAccess', $data);
+                                
+                                $msg = 'Private RoleMethod "%s->%s" accessed outside its own RoleMethods. Make it protected if this is intended.';
+                                $data = [$roleName, $roleMethodName];
+                                $this->parser_error($msg, $roleMethod->start, 'AdjustRoleMethodAccess', $data);
+                            }
                         }
-                    }    
+                    }
                 }
             }
 
@@ -295,7 +302,7 @@ final class RoleConventionsSniff implements Sniff {
     private array $methods = [];
 
     protected function methods_get($name) {
-        return $this->methods[$name];
+        return $this->methods[$name] ?? null;
     }
 
     protected function methods_getAll() {
