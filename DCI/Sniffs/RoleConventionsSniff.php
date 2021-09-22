@@ -55,22 +55,24 @@ final class RoleConventionsSniff implements Sniff {
 
         switch($current['code']) {
             case T_DOC_COMMENT_TAG:
-                if(!$this->context_exists()) {
-                    $tag = strtolower($current['content']);
-                    $tagged = in_array($tag, ['@context', '@dci', '@dcicontext']);
+                if($this->context_exists()) break;
 
-                    if($tagged && $classPos = $this->_findNext(T_CLASS, $stackPtr)) {
-                        // New class found
-                        $class = $tokens[$classPos];
-                        $this->context = new Context($class['scope_opener'], $class['scope_closer']);
-                        return true;
-                    }
+                $tag = strtolower($current['content']);
+                $tagged = in_array($tag, ['@context', '@dci', '@dcicontext']);
+
+                if($tagged && $classPos = $this->_findNext(T_CLASS, $stackPtr)) {
+                    // New class found
+                    $class = $tokens[$classPos];
+                    $this->context = new Context($class['scope_opener'], $class['scope_closer']);
+                    return true;
                 }
                 break;
             
             case T_PRIVATE:
             case T_PROTECTED:
             case T_PUBLIC:
+                if(!$this->context_exists()) break;
+
                 // Check if it's a method
                 if($funcPos = $this->_findNext(T_FUNCTION, $stackPtr)) {                    
                     $funcToken = $tokens[$funcPos];
@@ -82,7 +84,7 @@ final class RoleConventionsSniff implements Sniff {
                         $funcName, $funcPos, $funcToken['scope_closer'], $current['code']
                     );
 
-                    return !!$this->currentMethod;
+                    return true;
                 }
                 break;
 
