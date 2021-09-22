@@ -13,6 +13,7 @@ use PHP_CodeSniffer\Standards\DCI\Context;
 use PHP_CodeSniffer\Standards\DCI\Role;
 use PHP_CodeSniffer\Standards\DCI\Method;
 use PHP_CodeSniffer\Standards\DCI\Ref;
+
 use PHP_CodeSniffer\Standards\DCI\CheckDCIRules;
 
 /**
@@ -33,6 +34,7 @@ final class RoleConventionsSniff implements Sniff {
 
     private bool $_ignoreNextRole = false;
     private array $_ignoredRoles = [];
+    private int $_ignoreUntil = 0;
 
     /**
      * Must always be set when process is called.
@@ -80,7 +82,7 @@ final class RoleConventionsSniff implements Sniff {
                         $funcName, $funcPos, $funcToken['scope_closer'], $current['code']
                     );
 
-                    return true;
+                    return !!$this->currentMethod;
                 }
                 break;
 
@@ -117,7 +119,7 @@ final class RoleConventionsSniff implements Sniff {
     }
 
     protected function currentMethod_addRef(string $to, int $pos, bool $isAssignment) {
-        if(in_array($to, $this->_ignoredRoles)) return;
+        if(!$this->currentMethod_exists() || in_array($to, $this->_ignoredRoles)) return;
 
         $isRoleMethod = !!preg_match($this->roleMethodFormat, $to);
         $isRole = !$isRoleMethod && !!preg_match($this->roleFormat, $to);
@@ -159,19 +161,12 @@ final class RoleConventionsSniff implements Sniff {
         $role = null;
 
         if($isRoleMethod) {
-            // TODO: Move error check to real context
-            /*
-            if($access == T_PUBLIC) {
-                $msg = 'RoleMethod "%s->%s" is public, must be private or protected.';
-                $data = [$matches[1], $matches[2]];
-                $this->_parser->addError($msg, $start, 'PublicRoleMethod', $data);
-            } else {
-            */
             // Roles must be defined before their RoleMethods, so this check is ok.
             if(!array_key_exists($matches[1], $this->context->roles())) {
-                $msg = 'Role "%s" does not exist. Add it as "private $%s;" above this method.';
-                $data = [$matches[1], $matches[1]];
+                $msg = 'Method "%s" must be positioned below its Role "%s".';
+                $data = [$name, $matches[1]];
                 $this->_parser->addError($msg, $start, 'NonExistingRole', $data);
+                $this->_ignoreUntil = $end;
             } else {                
                 // Add the RoleMethod to the Role
                 $role = $this->context->roles()[$matches[1]];
@@ -218,6 +213,9 @@ final class RoleConventionsSniff implements Sniff {
         $this->_parser = $file;
      
         if($this->_rebind($stackPtr) || !$this->context_exists()) 
+            return;
+
+        if($stackPtr < $this->_ignoreUntil)
             return;
         
         $tokens = $this->_parser->getTokens();
@@ -280,16 +278,5 @@ final class RoleConventionsSniff implements Sniff {
                 }
                 break; 
         }
-    }
-
-    private function advanceUntil($type, $curPos) {
-        $tokens = $this->_parser->getTokens();
-        $current = $tokens[++$curPos] ?? null;
-
-        while($current['code'] == T_WHITESPACE || $current['code'] == T_COMMENT) {
-            $current = $tokens[++$curPos];
-        }
-
-        return $current['code'] == $type ? $found : null;
     }
 }

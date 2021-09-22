@@ -2,15 +2,14 @@
 
 namespace PHP_CodeSniffer\Standards\DCI;
 
+use PHP_CodeSniffer\Files\File;
+
 require_once __DIR__ . '/Context.php';
 
-use PHP_CodeSniffer\Files\File;
 use PHP_CodeSniffer\Standards\DCI\Context;
 use PHP_CodeSniffer\Standards\DCI\Role;
 use PHP_CodeSniffer\Standards\DCI\Method;
 use PHP_CodeSniffer\Standards\DCI\Ref;
-
-// currentClass_checkRules: [methods_get, methods_getAll, parser_error, parser_warning, roles_exist, roles_get, roles_getAll, roles_getNames]"
 
 /**
  * @context
@@ -27,7 +26,7 @@ final class CheckDCIRules {
         $this->context_checkRules();
     }
 
-    public ?string $_listRoleMethods = null;
+    public ?string $_listRoleMethodRefs = null;
 
     ///// Roles ///////////////////////////////////////////
 
@@ -43,40 +42,8 @@ final class CheckDCIRules {
 
     private $roles;
 
-    protected function roles_exist($roleName) {
-        return $this->roles_named($roleName) != null;
-    }
-
-    protected function roles_named($roleName) {
-        return $this->roles[$roleName] ?? null;
-    }
-
     protected function roles_names() {
         return array_keys($this->roles);
-    }
-
-    protected function roles_all() {
-        return ($this->roles);
-    }
-
-    protected function roles_checkRoleMethodPositions() {
-        // Use array_values to get a numeric key for comparison with
-        // the next Role's position.
-        $roles = array_values($this->roles);
-        $lastKey = count($roles) - 1;
-
-        foreach($roles as $key => $role) {
-            $start = $role->pos();
-            $end = $key < $lastKey ? $roles[$key + 1]->pos() : PHP_INT_MAX;
-
-            foreach($role->methods() as $name => $method) {
-                if($method->start() < $start || $method->start() > $end) {
-                    $msg = 'RoleMethod "%s" is not positioned below its Role.';
-                    $data = [$method->fullName()];
-                    $this->parser_error($msg, $method->start(), 'RoleMethodPosition', $data);
-                }
-            }
-        }
     }
 
     private $context;
@@ -88,11 +55,21 @@ final class CheckDCIRules {
     protected function context_checkRules() {
         $assignedPos = 0;
 
+        $unreferenced = array_filter($this->context->methods(), function($method) {
+            return !!$method->role();
+        });
+
         foreach ($this->context->methods() as $method) {
             $assigned = [];
             $listMethods = [];
 
             $role = $method->role();
+
+            if($role && $method->access() == T_PUBLIC) {
+                $msg = 'RoleMethod "%s" is public, must be private or protected.';
+                $data = [$method->fullName()];
+                $this->parser_error($msg, $method->start(), 'PublicRoleMethod', $data);
+            }
 
             foreach($method->refs() as $ref) {
                 if($ref->type() == Ref::ROLE) {
@@ -111,7 +88,7 @@ final class CheckDCIRules {
                     // References a RoleMethod, check access
 
                     // Debug feature
-                    if($role && $this->_listRoleMethods == $method->fullName()) {
+                    if($role && $this->_listRoleMethodRefs == $method->fullName()) {
                         $this->parser_warning($ref->to(), $ref->pos(), 'ListRoleMethods');
                         $listMethods[$ref->to()] = true;
                     }
@@ -126,6 +103,8 @@ final class CheckDCIRules {
                         
                         $msg = 'Private RoleMethod "%s" accessed outside its own RoleMethods. Make it protected if this is intended.';
                         $this->parser_error($msg, $referenced->start(), 'AdjustRoleMethodAccess', $data);
+                    } else {
+                        unset($unreferenced[$ref->to()]);
                     }
                 }
             }
@@ -159,7 +138,11 @@ final class CheckDCIRules {
             }
         }
 
-        $this->roles_checkRoleMethodPositions();
+        foreach ($unreferenced as $method) {
+            $msg = 'Unreferenced RoleMethod "%s"';
+            $data = [$method->fullName()];
+            $this->parser_warning($msg, $method->start(), 'UnreferencedRoleMethod', $data);    
+        }
     }
 
 }
