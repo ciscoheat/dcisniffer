@@ -18,7 +18,6 @@ final class CheckDCIRules {
     public function __construct(File $file, Context $context) {
         $this->parser = $file;
         $this->context = $context;
-        $this->roles = $context->roles();
         $this->methods = $context->methods();
     }
 
@@ -40,13 +39,11 @@ final class CheckDCIRules {
         $this->parser->addWarning($msg, $pos, $errorCode, $data);
     }
 
-    private $roles;
-
-    protected function roles_names() {
-        return array_keys($this->roles);
-    }
-
     private $context;
+
+    protected function context_roleNames() {
+        return array_keys($this->context->roles());
+    }
 
     private function context_methodNamed($fullName) : Method {
         return $this->context->methods()[$fullName];
@@ -117,14 +114,16 @@ final class CheckDCIRules {
             }
 
             if(count($assigned) > 0) {
-                $roleNames = $this->roles_names();
+                $roleNames = $this->context_roleNames();
+
                 if($assignedPos) {
-                    foreach ($assigned as $ref) {                        
-                        $msg = 'All Roles must be bound inside a single method. Move this assignment to the other method.';
-                        $this->parser_error($msg, $ref->pos, 'RoleNotBoundInSingleMethod');
+                    // Roles were assigned already in another method
+                    foreach ($assigned as $ref) {
+                        $msg = 'All Roles must be bound inside a single method.';
+                        $this->parser_error($msg, $ref->pos(), 'RolesNotBoundInSingleMethod');
 
                         $msg = 'Method where roles are currently bound.';
-                        $this->parser_error($msg, $assignedPos, 'RoleNotBoundInSingleMethod');
+                        $this->parser_error($msg, $assignedPos, 'RolesNotBoundInSingleMethod');
                     }
                 }
                 else if(count($assigned) < count($roleNames)) {
