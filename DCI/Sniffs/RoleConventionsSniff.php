@@ -35,6 +35,7 @@ final class RoleConventionsSniff implements Sniff {
     private bool $_ignoreNextRole = false;
     private array $_ignoredRoles = [];
     private int $_ignoreUntil = 0;
+    private array $_attachRole = [];
 
     /**
      * Must always be set when process is called.
@@ -92,6 +93,7 @@ final class RoleConventionsSniff implements Sniff {
                 // Check end of Context or Method
                 if($this->context_exists() && $current['scope_closer'] == $this->context_endPos()) {
                     // Context ends, check rules
+                    $this->context_attachMethodsToRoles();                    
                     (new CheckDCIRules($this->_parser, $this->context))->check();
                     $this->context = null;
                     return true;
@@ -111,7 +113,7 @@ final class RoleConventionsSniff implements Sniff {
     ///// Roles /////////////////////////////////////////////////////
 
     private ?Method $currentMethod = null;
-
+    
     protected function currentMethod_exists() : bool {
         return !!$this->currentMethod;
     }
@@ -159,31 +161,32 @@ final class RoleConventionsSniff implements Sniff {
     }
 
     protected function context_addMethod(string $name, int $start, int $end, int $access) {
+        $method = new Method($name, $start, $end, $access);
+        
         $isRoleMethod = preg_match($this->roleMethodFormat, $name, $matches);
-        $role = null;
 
         if($isRoleMethod) {
-            // Roles must be defined before their RoleMethods, so this check is ok.
-            if(!array_key_exists($matches[1], $this->context->roles())) {
-                $msg = 'Method "%s" must be positioned below its Role "%s".';
-                $data = [$name, $matches[1]];
-                $this->_parser->addError($msg, $start, 'NonExistingRole', $data);
-                $this->_ignoreUntil = $end;
-            } else {                
-                // Add the RoleMethod to the Role
-                $role = $this->context->roles()[$matches[1]];
-            }
-        }
-
-        $method = new Method($name, $start, $end, $access, $role);
-
-        if($role) {
-            $role->addMethod($matches[2], $method);
+            $this->_attachRole[] = (object)['method' => $method, 'roleName' => $matches[1], 'methodName' => $matches[2]];
         }
 
         $this->context->addMethod($method);
 
         return $method;
+    }
+
+    protected function context_attachMethodsToRoles() {
+        $roles = $this->context->roles();
+
+        foreach($this->_attachRole as $attach) {
+            $role = $roles[$attach->roleName] ?? null;
+            if($role) {
+                $role->addMethod($attach->methodName, $attach->method);
+            } else {
+                $msg = 'Role "%s" does not exist. Add it as "private $%s;" above this RoleMethod.';
+                $data = [$attach->roleName, $attach->roleName];
+                $this->_parser->addError($msg, $attach->method->start(), 'NonExistingRole', $data);
+            }
+        }
     }
 
     ///////////////////////////////////////////////////////

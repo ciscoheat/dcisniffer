@@ -49,7 +49,29 @@ final class CheckDCIRules {
         return $this->context->methods()[$fullName];
     }
 
+    private function context_checkRoleMethodPositions() {
+        // Use array_values to get a numeric key for comparison with
+        // the next Role's position.
+        $roles = array_values($this->context->roles());
+        $lastKey = count($roles) - 1;
+
+        foreach($roles as $key => $role) {
+            $start = $role->pos();
+            $end = $key < $lastKey ? $roles[$key + 1]->pos() : PHP_INT_MAX;
+
+            foreach($role->methods() as $method) {
+                if($method->start() < $start || $method->start() > $end) {
+                    $msg = 'RoleMethod "%s" must be positioned below its Role.';
+                    $data = [$method->fullName()];
+                    $this->parser_error($msg, $method->start(), 'RoleMethodPosition', $data);
+                }
+            }
+        }
+    }
+
     protected function context_checkRules() {
+        $this->context_checkRoleMethodPositions();
+
         $assignedPos = 0;
 
         $unreferenced = array_filter($this->context->methods(), function($method) {

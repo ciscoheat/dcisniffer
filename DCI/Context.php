@@ -54,6 +54,7 @@ final class Role {
     }
 
     public function addMethod(string $name, Method $method) {
+        $method->setRole($this);
         $this->_methods[$name] = $method;
     }
 }
@@ -77,7 +78,7 @@ final class Method {
     private ?Role $_role = null;
     public function role() { return $this->_role; }
 
-    public function __construct(string $fullName, int $start, int $end, int $access, ?Role $role) {
+    public function __construct(string $fullName, int $start, int $end, int $access) {
         assert(strlen($fullName) > 0, "Empty Method name");
         assert($start > 0, 'Invalid start pos');
         assert($end > $start, 'Invalid end pos');
@@ -87,7 +88,6 @@ final class Method {
         $this->_start = $start;
         $this->_end = $end;
         $this->_access = $access;
-        $this->_role = $role;
     }
 
     public function addRef(Ref $ref) {
@@ -96,6 +96,11 @@ final class Method {
 
     public function ref($refName) : Ref {
         return $this->_refs[$refName] ?? null;
+    }
+
+    public function setRole(Role $role) {
+        assert($this->_role == null, "Role is already set for Method " . $this->fullName());
+        $this->_role = $role;
     }
 }
 
