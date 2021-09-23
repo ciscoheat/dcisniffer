@@ -34,7 +34,6 @@ final class RoleConventionsSniff implements Sniff {
 
     private bool $_ignoreNextRole = false;
     private array $_ignoredRoles = [];
-    private int $_ignoreUntil = 0;
     private array $_attachRole = [];
 
     /**
@@ -123,7 +122,7 @@ final class RoleConventionsSniff implements Sniff {
     }
 
     protected function currentMethod_addRef(string $to, int $pos, bool $isAssignment) {
-        if(!$this->currentMethod_exists() || in_array($to, $this->_ignoredRoles)) return;
+        if(in_array($to, $this->_ignoredRoles)) return;
 
         $isRoleMethod = !!preg_match($this->roleMethodFormat, $to);
         $isRole = !$isRoleMethod && !!preg_match($this->roleFormat, $to);
@@ -220,9 +219,6 @@ final class RoleConventionsSniff implements Sniff {
         if($this->_rebind($stackPtr) || !$this->context_exists()) 
             return;
 
-        if($stackPtr < $this->_ignoreUntil)
-            return;
-        
         $tokens = $this->_parser->getTokens();
         $current = $tokens[$stackPtr];
         $type = $current['code'];
@@ -236,12 +232,13 @@ final class RoleConventionsSniff implements Sniff {
                 if(in_array($tag, ['@norole', '@nodcirole', '@ignorerole', '@ignoredcirole'])) {
                     $this->_ignoreNextRole = true;
                 }
-
                 break;
 
             case T_PRIVATE:
             case T_PROTECTED:
             case T_PUBLIC:
+                assert(!$this->currentMethod_exists(), 'currentMethod should not exist.');
+                
                 // Check if it's a Role definition
                 if($rolePos = $this->_findNext(T_VARIABLE, $stackPtr)) {
                     $name = substr($tokens[$rolePos]['content'], 1);
@@ -259,6 +256,8 @@ final class RoleConventionsSniff implements Sniff {
                 break;
 
             case T_VARIABLE:
+                if(!$this->currentMethod_exists()) break;
+
                 // Check if a Role or RoleMethod is referenced.
                 if($current['content'] == '$this' && $varPos = $this->_findNext(T_STRING, $stackPtr)) {
                     $isAssignment = null;
