@@ -50,21 +50,25 @@ final class CheckDCIRules {
     }
 
     private function context_checkRoleMethodPositions() {
-        // Use array_values to get a numeric key for comparison with
-        // the next Role's position.
-        $roles = array_values($this->context->roles());
-        $lastKey = count($roles) - 1;
+        $start = 0;
+        $end = PHP_INT_MAX;
+        $currentRole = null;
 
-        foreach($roles as $key => $role) {
-            $start = $role->pos();
-            $end = $key < $lastKey ? $roles[$key + 1]->pos() : PHP_INT_MAX;
+        foreach($this->context->methods() as $method) {
+            $role = $method->role();
 
-            foreach($role->methods() as $method) {
-                if($method->start() < $start || $method->start() > $end) {
-                    $msg = 'RoleMethod "%s" must be positioned below its Role.';
-                    $data = [$method->fullName()];
-                    $this->parser_error($msg, $method->start(), 'RoleMethodPosition', $data);
-                }
+            if(!$role) {
+                $end = $method->start();
+            } else if($currentRole != $role) {
+                $start = $role->pos();
+                $end = PHP_INT_MAX;
+                $currentRole = $role;
+            }
+
+            if($role && ($method->start() < $start || $method->start() > $end)) {
+                $msg = 'RoleMethod "%s" must be positioned below its Role.';
+                $data = [$method->fullName()];
+                $this->parser_error($msg, $method->start(), 'RoleMethodPosition', $data);
             }
         }
     }
@@ -165,5 +169,4 @@ final class CheckDCIRules {
             $this->parser_warning($msg, $method->start(), 'UnreferencedRoleMethod', $data);    
         }
     }
-
 }

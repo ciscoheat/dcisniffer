@@ -34,7 +34,7 @@ final class RoleConventionsSniff implements Sniff {
 
     private bool $_ignoreNextRole = false;
     private array $_ignoredRoles = [];
-    private array $_attachRole = [];
+    private array $_addMethodToRole = [];
 
     /**
      * Must always be set when process is called.
@@ -108,7 +108,6 @@ final class RoleConventionsSniff implements Sniff {
         return false;
     }
 
-
     ///// Roles /////////////////////////////////////////////////////
 
     private ?Method $currentMethod = null;
@@ -165,7 +164,7 @@ final class RoleConventionsSniff implements Sniff {
         $isRoleMethod = preg_match($this->roleMethodFormat, $name, $matches);
 
         if($isRoleMethod) {
-            $this->_attachRole[] = (object)['method' => $method, 'roleName' => $matches[1], 'methodName' => $matches[2]];
+            $this->_addMethodToRole[] = (object)['method' => $method, 'roleName' => $matches[1], 'methodName' => $matches[2]];
         }
 
         $this->context->addMethod($method);
@@ -176,7 +175,7 @@ final class RoleConventionsSniff implements Sniff {
     protected function context_attachMethodsToRoles() {
         $roles = $this->context->roles();
 
-        foreach($this->_attachRole as $attach) {
+        foreach($this->_addMethodToRole as $attach) {
             $role = $roles[$attach->roleName] ?? null;
             if($role) {
                 $role->addMethod($attach->methodName, $attach->method);
