@@ -23,12 +23,22 @@ final class RoleConventionsSniff implements Sniff {
     /**
      * @noDCIRole
      */
-    public $roleFormat = '/^([a-zA-Z0-9]+)$/';
+    public string $roleFormat = '/^([a-zA-Z0-9]+)$/';
 
     /**
      * @noDCIRole
      */
-    public $roleMethodFormat = '/^([a-zA-Z0-9]+)_+([a-zA-Z0-9]+)$/';
+    public string $roleMethodFormat = '/^([a-zA-Z0-9]+)_+([a-zA-Z0-9]+)$/';
+
+    /**
+     * @noDCIRole
+     */
+    public ?string $listCallsInRoleMethod = null;
+
+    /**
+     * @noDCIRole
+     */
+    public ?string $listCallsToRoleMethod = null;
 
     ///// State ///////////////////////////////////////////
 
@@ -93,7 +103,7 @@ final class RoleConventionsSniff implements Sniff {
                 if($this->context_exists() && $current['scope_closer'] == $this->context_endPos()) {
                     // Context ends, check rules
                     $this->context_attachMethodsToRoles();                    
-                    (new CheckDCIRules($this->_parser, $this->context))->check();
+                    (new CheckDCIRules($this->_parser, $this->context, $this->listCallsInRoleMethod, $this->listCallsToRoleMethod))->check();
                     $this->context = null;
                     return true;
                 } else if($this->currentMethod_exists() && $current['scope_closer'] == $this->currentMethod_endPos()) {
@@ -102,13 +112,12 @@ final class RoleConventionsSniff implements Sniff {
                     return true;
                 }
                 break;
-    
         }
 
         return false;
     }
 
-    ///// Roles /////////////////////////////////////////////////////
+    ///// Roles ////////////////////////////////////////////////////
 
     private ?Method $currentMethod = null;
     

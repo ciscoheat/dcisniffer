@@ -15,17 +15,22 @@ use PHP_CodeSniffer\Standards\DCI\Ref;
  * @context
  */
 final class CheckDCIRules {
-    public function __construct(File $file, Context $context) {
+    public function __construct(File $file, Context $context, ?string $listCallsIn = null, ?string $listCallsTo = null) {
         $this->parser = $file;
         $this->context = $context;
-        $this->methods = $context->methods();
+        $this->_listCallsInRoleMethod = $listCallsIn;
+        $this->_listCallsToRoleMethod = $listCallsTo;
     }
 
     public function check() {
         $this->context_checkRules();
     }
 
-    public ?string $_listRoleMethodRefs = null;
+    // Supplied from RoleConventionsSniff
+    private ?string $_listCallsInRoleMethod = null;
+    
+    // Supplied from RoleConventionsSniff
+    private ?string $_listCallsToRoleMethod = null;
 
     ///// Roles ///////////////////////////////////////////
 
@@ -77,6 +82,7 @@ final class CheckDCIRules {
         $this->context_checkRoleMethodPositions();
 
         $assignedPos = 0;
+        $listMethodsToCount = 0;
 
         $unreferenced = array_filter($this->context->methods(), function($method) {
             return !!$method->role();
@@ -84,17 +90,18 @@ final class CheckDCIRules {
 
         foreach ($this->context->methods() as $method) {
             $assigned = [];
-            $listMethods = [];
-
+            $listMethodsInRoleMethod = [];
+            
             $role = $method->role();
-
+            
             if($role && $method->access() == T_PUBLIC) {
                 $msg = 'RoleMethod "%s" is public, must be private or protected.';
                 $data = [$method->fullName()];
                 $this->parser_error($msg, $method->start(), 'PublicRoleMethod', $data);
             }
-
+            
             foreach($method->refs() as $ref) {
+
                 if($ref->type() == Ref::ROLE) {
                     if($ref->isAssignment()) {
                         $assigned[$ref->to()] = $ref;
@@ -111,9 +118,13 @@ final class CheckDCIRules {
                     // References a RoleMethod, check access
 
                     // Debug feature
-                    if($role && $this->_listRoleMethodRefs == $method->fullName()) {
-                        $this->parser_warning($ref->to(), $ref->pos(), 'ListRoleMethods');
-                        $listMethods[$ref->to()] = true;
+                    if($role && $this->_listCallsInRoleMethod == $method->fullName()) {
+                        $this->parser_warning($ref->to(), $ref->pos(), 'ListInRoleMethods');
+                        $listMethodsInRoleMethod[$ref->to()] = true;
+                    }
+                    if($this->_listCallsToRoleMethod == $ref->to()) {
+                        $this->parser_warning('"%s" calls "%s" here', $ref->pos(), 'ListToRoleMethods', [$method->fullName(), $ref->to()]);
+                        $listMethodsToCount++;
                     }
 
                     $referenced = $this->context_methodNamed($ref->to());
@@ -132,9 +143,9 @@ final class CheckDCIRules {
                 }
             }
 
-            // Debug feature: listRoleMethods
-            if(count($listMethods) > 0) {
-                $methods = array_keys($listMethods);
+            // Debug feature
+            if(count($listMethodsInRoleMethod) > 0) {
+                $methods = array_keys($listMethodsInRoleMethod);
                 sort($methods);
                 $this->parser_warning($method->fullName() . ': [' . implode(', ', $methods) . ']', $method->start(), 'ListRoleMethods');
             }
@@ -161,6 +172,12 @@ final class CheckDCIRules {
                     $assignedPos = $method->start();
                 }
             }
+        }
+
+        // Debug feature
+        if($this->_listCallsToRoleMethod && array_key_exists($this->_listCallsToRoleMethod, $this->context->methods())) {
+            $method = $this->context->methods()[$this->_listCallsToRoleMethod];
+            $this->parser_warning('%u call(s) to %s', $method->start(), 'ListToRoleMethods', [$listMethodsToCount, $method->fullName()]);
         }
 
         foreach ($unreferenced as $method) {
