@@ -274,8 +274,6 @@ We just mentioned Interactions, which is the last part of the DCI acronym. An **
 
 If you're basing the Context on a use case, there is usually only one System Operation in a Context. Let's call it `transfer`. Try not to use a generic name like "execute" or "run", instead give your API meaning by letting every method name carry meaningful information.
 
-**MoneyTransfer.hx**
-
 ```php
 final class MoneyTransfer {
     // System Operation
