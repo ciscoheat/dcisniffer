@@ -21,7 +21,7 @@ Now there is only one thing you need to do to enable the conventions, which is t
 /**
  * @context
  */
-final final class MoneyTransfer {
+final class MoneyTransfer {
     ...
 }
 ```
