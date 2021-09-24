@@ -91,7 +91,7 @@ final class Method {
     }
 
     public function addRef(Ref $ref) {
-        $this->_refs[$ref->to()] = $ref;
+        $this->_refs[] = $ref;
     }
 
     public function ref($refName) : Ref {

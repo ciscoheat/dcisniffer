@@ -28,7 +28,7 @@ final class CheckDCIRules {
 
     // Supplied from RoleConventionsSniff
     private ?string $_listCallsInRoleMethod = null;
-    
+
     // Supplied from RoleConventionsSniff
     private ?string $_listCallsToRoleMethod = null;
 
@@ -128,6 +128,7 @@ final class CheckDCIRules {
                     }
 
                     $referenced = $this->context_methodNamed($ref->to());
+                    unset($unreferenced[$ref->to()]);
 
                     if($referenced->access() == T_PRIVATE && $method->role() != $referenced->role()) {
                         $data = [$referenced->fullName()];
@@ -137,9 +138,8 @@ final class CheckDCIRules {
                         
                         $msg = 'Private RoleMethod "%s" accessed outside its own RoleMethods. Make it protected if this is intended.';
                         $this->parser_error($msg, $referenced->start(), 'AdjustRoleMethodAccess', $data);
-                    } else {
-                        unset($unreferenced[$ref->to()]);
                     }
+                    
                 }
             }
 
