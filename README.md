@@ -52,6 +52,12 @@ private function source_checkBalance() {
 }
 ```
 
+An exception for Role accesss is made when `@` is prepended in the Context. This is only for passing roleplayers to other Contexts, for example when instantiating a new Context:
+
+```php
+(new CheckDCIRules(@$this->parser))->check();
+```
+
 ## Assignment
 
 Roles must all be assigned (bound) within a single method, which commonly is the constructor, but can be moved to another method if needed. See the tutorial further down for more information.
