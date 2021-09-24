@@ -96,7 +96,7 @@ There are two other properties available in the configuration:
 
 ## Ignoring properties
 
-If for some reason a context contains a public property that must adhere to a certain naming that conflicts with the Role naming, you can ignore it by tagging it with `@noDCIRole`:
+If for some reason a Context must contain a public property that must adhere to a certain naming that conflicts with the Role naming, you can ignore that property by tagging it with `@noDCIRole`. Having public properties on a Context is not recommended, since Contexts should be highly encapsulated in general. Data is a more likely candidate for properties (see the Tutorial below for more information).
 
 ```php
 /**
