@@ -28,31 +28,39 @@ final final class MoneyTransfer {
 
 # Basic conventions
 
-**Naming:** Roles are created as private properties: `private $source`. As default they must be in `camelCase` or `ProperCase` format and cannot contain underscore. By prefixing/suffixing a property with underscore however, it will not be treated as a Role but as a normal class property.
+## Naming
 
-RoleMethods are added below the Roles as methods: `protected function source_decreaseBalance(int $amount)`. They always start with the Role name, then any number of underscores, then the method name, in the same format as the Role. Methods without underscores are treated as normal class methods.
+**Roles** are created as private properties: `private $source`. As default they must be in `camelCase` or `ProperCase` format and cannot contain underscore. By prefixing/suffixing a property with underscore however, it will not be treated as a Role but as a normal class property.
 
-**Access:** A Role can only be accessed within its RoleMethods, and it's accessor must always be `private`. A RoleMethod can be accessed from other parts of the Context when it's `protected`, but if it's `private`, only within its other RoleMethods:
+**RoleMethods** are added below the Roles as methods: `protected function source_decreaseBalance(int $amount)`. They always start with the Role name, then any number of underscores, then the method name, in the same format as the Role. Methods without underscores are treated as normal class methods.
+
+## Access
+
+A Role can only be accessed within its RoleMethods, and its accessor must always be `private`. A RoleMethod can be accessed from other parts of the Context when it's `protected`, but if it's `private`, only within its other RoleMethods:
 
 ```php
 private $source;
 
-// Accessed from anywhere in the Context, since it's protected
+// Accessed from anywhere in the Context, since it's protected.
 protected function source_decreaseBalance(int $amount) {
     ...
 }
 
-// Can only be accessed from RoleMethods belonging to the 'source' Role
+// Can only be accessed from RoleMethods belonging to the 'source' Role.
 private function source_checkBalance() {
     ...
 }
 ```
 
-**Assignment:** Roles must all be assigned (bound) within a single method, which commonly is the constructor, but can be moved to another method if needed. See the tutorial further down for more information.
+## Assignment
 
-## Naming configuration
+Roles must all be assigned (bound) within a single method, which commonly is the constructor, but can be moved to another method if needed. See the tutorial further down for more information.
 
-By creating your own code standard xml file, you can modify the format of the Roles and RoleMethods. They are configured by two properties, `roleFormat` and `roleMethodFormat`. They both contain a regexp used to extract the name of the Role and its method. Create a `phpcs.xml` file in your project directory:
+# Configuration
+
+## Custom naming scheme
+
+By creating your own code standard xml file, you can modify the naming format of the Roles and RoleMethods. They are configured by two properties, `roleFormat` and `roleMethodFormat`. They both contain a regexp for extracting the name of the Role and its method. To modify it, create a `phpcs.xml` file in your project directory:
 
 **phpcs.xml**
 
@@ -70,13 +78,32 @@ By creating your own code standard xml file, you can modify the format of the Ro
 </ruleset>
 ```
 
-This configuration makes the naming adhere to another common PHP standard, using underscores instead of camelCase. Two underscores are then separating the Role name from the method:
+This configuration makes the naming adhere to another common PHP standard, using underscores instead of camelCase. Two underscores are separating the Role name from the method:
 
 `current_method` - Now a valid Role.
 
 `current_method__add_role_ref` - With a RoleMethod called `add_role_ref`.
 
-Note that each name in the regexp must be enclosed with parenthesis.
+Note that each name in the regexps must be enclosed with parenthesis.
+
+## Debug configuration
+
+There are two other properties available in the configuration:
+
+`listCallsInRoleMethod` - When set to a RoleMethod, it will list all calls to other RoleMethods.
+
+`listCallsToRoleMethod` - The other way around, this will list all calls to a RoleMethod from other parts of the Context.
+
+## Ignoring properties
+
+If for some reason a context contains a public property that must adhere to a certain naming that conflicts with the Role naming, you can ignore it by tagging it with `@noDCIRole`:
+
+```php
+/**
+ * @noDCIRole
+ */
+public $someOtherProperty;
+```
 
 # DCI Tutorial
 
@@ -218,7 +245,7 @@ We need an underscore in the name so the DCI library won't mistake it for a Role
 
 (It's worth noting that in a more realistic example, `amount` would probably have some `Currency` class behind it, enabling it to play a Role.)
 
-### Role field access
+### Role and RoleMethod access
 
 RoleMethods must be declared `protected` to allow access outside their corresponding Role. Roles should only be accessed within its own RoleMethods however. This enables the ability to trace the flow of cooperation between Roles, instead of any Role being able to call another Roles' underlying object at all times. It's a helpful separation between the local reasoning of how Roles interact locally with their object, and how Roles interact with each other. A goal with DCI is readability, and this helps reading and understanding the use-case-level logic of a Context.
 
