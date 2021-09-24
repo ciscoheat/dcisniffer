@@ -102,8 +102,7 @@ final class RoleConventionsSniff implements Sniff {
                 // Check end of Context or Method
                 if($this->context_exists() && $current['scope_closer'] == $this->context_endPos()) {
                     // Context ends, check rules
-                    $this->context_attachMethodsToRoles();                    
-                    (new CheckDCIRules($this->_parser, $this->context, $this->listCallsInRoleMethod, $this->listCallsToRoleMethod))->check();
+                    $this->context_checkRules();
                     $this->context = null;
                     return true;
                 } else if($this->currentMethod_exists() && $current['scope_closer'] == $this->currentMethod_endPos()) {
@@ -173,6 +172,8 @@ final class RoleConventionsSniff implements Sniff {
         $isRoleMethod = preg_match($this->roleMethodFormat, $name, $matches);
 
         if($isRoleMethod) {
+            // Save the method so it can be attached to its Role
+            // when the Context is fully parsed.
             $this->_addMethodToRole[] = (object)['method' => $method, 'roleName' => $matches[1], 'methodName' => $matches[2]];
         }
 
@@ -181,7 +182,12 @@ final class RoleConventionsSniff implements Sniff {
         return $method;
     }
 
-    protected function context_attachMethodsToRoles() {
+    protected function context_checkRules() {
+        $this->context_attachMethodsToRoles();
+        (new CheckDCIRules($this->_parser, $this->context, $this->listCallsInRoleMethod, $this->listCallsToRoleMethod))->check();
+    }
+
+    private function context_attachMethodsToRoles() {
         $roles = $this->context->roles();
 
         foreach($this->_addMethodToRole as $attach) {
