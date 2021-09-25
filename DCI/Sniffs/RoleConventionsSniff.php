@@ -175,6 +175,7 @@ final class RoleConventionsSniff implements Sniff {
     }
 
     protected function parser_checkNewMethod(int $stackPtr) : ?Method {
+        if(!$this->context_exists()) return null;
         if($this->currentMethod_exists()) return null;
 
         $tokens = $this->parser->getTokens();
