@@ -46,7 +46,7 @@ final class CheckDCIRules {
 
     private $context;
 
-    protected function context_roleNames() {
+    private function context_roleNames() {
         return array_keys($this->context->roles());
     }
 
@@ -86,6 +86,10 @@ final class CheckDCIRules {
 
         $unreferenced = array_filter($this->context->methods(), function($method) {
             return !!$method->role();
+        });
+
+        $outsideRef = array_filter($this->context->methods(), function($method) {
+            return $method->role() && $method->access() == T_PROTECTED;
         });
 
         foreach ($this->context->methods() as $method) {
@@ -129,15 +133,19 @@ final class CheckDCIRules {
 
                     $referenced = $this->context_methodNamed($ref->to());
                     
-                    if($referenced->access() == T_PRIVATE && $method->role() != $referenced->role()) {
-                        $data = [$referenced->fullName()];
-                        
-                        $msg = 'Private RoleMethod "%s" accessed outside its own RoleMethods here.';
-                        $this->parser_error($msg, $ref->pos(), 'InvalidRoleMethodAccess', $data);
-                        
-                        if(isset($unreferenced[$ref->to()])) {
-                            $msg = 'Private RoleMethod "%s" accessed outside its own RoleMethods. Make it protected if this is intended.';
-                            $this->parser_error($msg, $referenced->start(), 'AdjustRoleMethodAccess', $data);
+                    if($method->role() != $referenced->role()) {
+                        if($referenced->access() == T_PRIVATE) {
+                            $data = [$referenced->fullName()];
+                            
+                            $msg = 'Private RoleMethod "%s" accessed outside its own RoleMethods here.';
+                            $this->parser_error($msg, $ref->pos(), 'InvalidRoleMethodAccess', $data);
+                            
+                            if(isset($unreferenced[$ref->to()])) {
+                                $msg = 'Private RoleMethod "%s" accessed outside its own RoleMethods. Make it protected if this is intended.';
+                                $this->parser_error($msg, $referenced->start(), 'AdjustRoleMethodAccess', $data);
+                            }
+                        } else {
+                            unset($outsideRef[$ref->to()]);
                         }
                     }
                     
@@ -186,6 +194,12 @@ final class CheckDCIRules {
             $msg = 'Unreferenced RoleMethod "%s"';
             $data = [$method->fullName()];
             $this->parser_warning($msg, $method->start(), 'UnreferencedRoleMethod', $data);    
+        }
+
+        foreach ($outsideRef as $method) {
+            $msg = 'RoleMethod "%s" has no references outside its Role and can be made private.';
+            $data = [$method->fullName()];
+            $this->parser_warning($msg, $method->start(), 'NoExternalRoleMethodReferences', $data);    
         }
     }
 }
