@@ -128,18 +128,20 @@ final class CheckDCIRules {
                     }
 
                     $referenced = $this->context_methodNamed($ref->to());
-                    unset($unreferenced[$ref->to()]);
-
+                    
                     if($referenced->access() == T_PRIVATE && $method->role() != $referenced->role()) {
                         $data = [$referenced->fullName()];
-
+                        
                         $msg = 'Private RoleMethod "%s" accessed outside its own RoleMethods here.';
                         $this->parser_error($msg, $ref->pos(), 'InvalidRoleMethodAccess', $data);
                         
-                        $msg = 'Private RoleMethod "%s" accessed outside its own RoleMethods. Make it protected if this is intended.';
-                        $this->parser_error($msg, $referenced->start(), 'AdjustRoleMethodAccess', $data);
+                        if(isset($unreferenced[$ref->to()])) {
+                            $msg = 'Private RoleMethod "%s" accessed outside its own RoleMethods. Make it protected if this is intended.';
+                            $this->parser_error($msg, $referenced->start(), 'AdjustRoleMethodAccess', $data);
+                        }
                     }
                     
+                    unset($unreferenced[$ref->to()]);
                 }
             }
 
