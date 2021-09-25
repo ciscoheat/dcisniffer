@@ -201,13 +201,7 @@ final class RoleConventionsSniff implements Sniff {
         $tokens = $this->parser->getTokens();
         $current = $tokens[$stackPtr];
 
-        if($current['scope_closer'] == $this->context_endPos()) {
-            // Context ends, check rules
-            $this->context_checkRules();
-            return true;
-        }
-
-        return false;
+        return $this->context_checkIfEnds($current);
     }
 
     protected function parser_checkEndOfMethod(int $stackPtr) : bool {
@@ -322,7 +316,7 @@ final class RoleConventionsSniff implements Sniff {
         return !!$this->context;
     }
 
-    protected function context_endPos() : int {
+    private function context_endPos() : int {
         return $this->context->end();
     }
 
@@ -354,7 +348,17 @@ final class RoleConventionsSniff implements Sniff {
         return $method;
     }
 
-    protected function context_checkRules() {
+    protected function context_checkIfEnds($token) {
+        if($token['scope_closer'] == $this->context_endPos()) {
+            // Context ends, check rules
+            $this->context_checkRules();
+            return true;
+        }
+
+        return false;
+    }
+
+    private function context_checkRules() {
         $this->context_attachMethodsToRoles();
         (new CheckDCIRules(
             @$this->parser, @$this->context, 
