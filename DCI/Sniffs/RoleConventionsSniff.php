@@ -241,7 +241,7 @@ final class RoleConventionsSniff implements Sniff {
         // Check if a Role or RoleMethod is referenced.
         if($current['content'] == '$this' && $varPos = $this->parser_findNext(T_STRING)) {
             $isAssignment = null;
-            $isObjectAccess = null;
+            $objectAccess = null;
             $checkPos = $varPos;
 
             // Check for assignment, or direct access
@@ -253,15 +253,17 @@ final class RoleConventionsSniff implements Sniff {
                 }
 
                 if($code == T_OBJECT_OPERATOR) {
+                    // Role access: $this->someRole->objMethod
                     $isAssignment = false;
-                    $isObjectAccess = $this->tokens_at($checkPos + 1);
+                    $objectAccess = $this->tokens_at($checkPos + 1);
                 } else {
+                    // Check assignment: $this->someRole = ...
                     $isAssignment = array_key_exists($code, Tokens::$assignmentTokens);
-                    $isObjectAccess = false;
+                    $objectAccess = false;
                 }
             }
 
-            if(!$isAssignment && !$isObjectAccess) {
+            if(!$isAssignment && !$objectAccess) {
                 // Probably a Role reference "$this->someRole".
                 // Allow outside its RoleMethods if an @ is prepended.
                 // Used for instantiating other Contexts.
@@ -271,7 +273,7 @@ final class RoleConventionsSniff implements Sniff {
             }
 
             $name = $this->tokens_at($varPos)['content'];
-            $this->currentMethod_addRef($name, $varPos, $isAssignment, $isObjectAccess);
+            $this->currentMethod_addRef($name, $varPos, $isAssignment, $objectAccess);
         }
     }
 
@@ -283,7 +285,7 @@ final class RoleConventionsSniff implements Sniff {
         return !!$this->currentMethod;
     }
 
-    protected function currentMethod_addRef(string $to, int $pos, bool $isAssignment, $isObjectAccess) {
+    protected function currentMethod_addRef(string $to, int $pos, bool $isAssignment, $objectAccess) {
         if(in_array($to, $this->_ignoredRoles)) return;
 
         $isRoleMethod = !!preg_match($this->roleMethodFormat, $to);
@@ -294,12 +296,10 @@ final class RoleConventionsSniff implements Sniff {
 
         $type = $isRoleMethod ? Ref::ROLEMETHOD : Ref::ROLE;
 
-        if($type == Ref::ROLE && $isObjectAccess && $isObjectAccess['code'] == T_STRING) {
-            $calls = $isObjectAccess['content'];
-        }
-        else {
-            $calls = null;
-        }
+        $calls = 
+            $type == Ref::ROLE && $objectAccess && $objectAccess['code'] == T_STRING
+            ? $objectAccess['content']
+            : null;
 
         $ref = new Ref($to, $pos, $type, $isAssignment, $calls);
 
@@ -356,7 +356,7 @@ final class RoleConventionsSniff implements Sniff {
         return $method;
     }
 
-    protected function context_checkIfEnds() {
+    protected function context_checkIfEnds() : bool {
         if(!$this->context_exists()) return false;
 
         $current = $this->tokens_current();
@@ -372,7 +372,7 @@ final class RoleConventionsSniff implements Sniff {
         return false;
     }
 
-    private function context_checkRules() {
+    private function context_checkRules() : void {
         $this->context_attachMethodsToRoles();
         (new CheckDCIRules(
             @$this->parser, @$this->context, 
@@ -381,7 +381,7 @@ final class RoleConventionsSniff implements Sniff {
         ))->check();
     }
 
-    private function context_attachMethodsToRoles() {
+    private function context_attachMethodsToRoles() : void {
         $roles = $this->context->roles();
 
         foreach($this->_addMethodToRole as $attach) {
