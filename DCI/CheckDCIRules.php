@@ -1,4 +1,4 @@
-<?php 
+<?php
 
 namespace PHP_CodeSniffer\Standards\DCI;
 
@@ -15,11 +15,12 @@ use PHP_CodeSniffer\Standards\DCI\Ref;
  * @context
  */
 final class CheckDCIRules {
-    public function __construct(File $file, Context $context, ?string $listCallsIn = null, ?string $listCallsTo = null) {
+    public function __construct(File $file, Context $context, ?string $listCallsIn = null, ?string $listCallsTo = null, bool $listRoleInterfaces = false) {
         $this->parser = $file;
         $this->context = $context;
         $this->_listCallsInRoleMethod = $listCallsIn;
         $this->_listCallsToRoleMethod = $listCallsTo;
+        $this->_listRoleInterfaces = $listRoleInterfaces;
     }
 
     public function check() {
@@ -31,6 +32,9 @@ final class CheckDCIRules {
 
     // Supplied from RoleConventionsSniff
     private ?string $_listCallsToRoleMethod = null;
+
+    // Supplied from RoleConventionsSniff
+    private ?bool $_listRoleInterfaces = false;
 
     ///// Roles ///////////////////////////////////////////
 
@@ -83,6 +87,7 @@ final class CheckDCIRules {
 
         $assignedPos = 0;
         $listMethodsToCount = 0;
+        $listRoleInterfaces = [];
 
         $unreferenced = array_filter($this->context->methods(), function($method) {
             return !!$method->role();
@@ -95,15 +100,15 @@ final class CheckDCIRules {
         foreach ($this->context->methods() as $method) {
             $assigned = [];
             $listMethodsInRoleMethod = [];
-            
+
             $role = $method->role();
-            
+
             if($role && $method->access() == T_PUBLIC) {
                 $msg = 'RoleMethod "%s" is public, must be private or protected.';
                 $data = [$method->fullName()];
                 $this->parser_error($msg, $method->start(), 'PublicRoleMethod', $data);
             }
-            
+
             foreach($method->refs() as $ref) {
 
                 if($ref->type() == Ref::ROLE) {
@@ -116,6 +121,8 @@ final class CheckDCIRules {
                             $msg = 'Role "%s" accessed outside its RoleMethods';
                             $data = [$ref->to()];
                             $this->parser_error($msg, $ref->pos(), 'RoleAccessedOutsideItsMethods', $data);
+                        } else if($this->_listRoleInterfaces) {
+                            $listRoleInterfaces[$ref->to()][] = $ref->calls();
                         }
                     }
                 } else {
@@ -132,14 +139,14 @@ final class CheckDCIRules {
                     }
 
                     $referenced = $this->context_methodNamed($ref->to());
-                    
+
                     if($method->role() != $referenced->role()) {
                         if($referenced->access() == T_PRIVATE) {
                             $data = [$referenced->fullName()];
-                            
+
                             $msg = 'Private RoleMethod "%s" accessed outside its own RoleMethods here.';
                             $this->parser_error($msg, $ref->pos(), 'InvalidRoleMethodAccess', $data);
-                            
+
                             if(isset($unreferenced[$ref->to()])) {
                                 $msg = 'Private RoleMethod "%s" accessed outside its own RoleMethods. Make it protected if this is intended.';
                                 $this->parser_error($msg, $referenced->start(), 'AdjustRoleMethodAccess', $data);
@@ -148,7 +155,7 @@ final class CheckDCIRules {
                             unset($outsideRef[$ref->to()]);
                         }
                     }
-                    
+
                     unset($unreferenced[$ref->to()]);
                 }
             }
@@ -189,17 +196,26 @@ final class CheckDCIRules {
             $method = $this->context->methods()[$this->_listCallsToRoleMethod];
             $this->parser_warning('%u call(s) to %s', $method->start(), 'ListToRoleMethods', [$listMethodsToCount, $method->fullName()]);
         }
+        foreach($listRoleInterfaces as $role => $methods) {
+            $rolePos = $this->context->roles()[$role]->pos();
+            $methods = array_filter(array_unique($methods), function($a) {
+                return !!$a;
+            });
+            $msg = 'RoleInterface for %s: [%s]';
+            $data = [$role, implode(', ', $methods)];
+            $this->parser_warning($msg, $rolePos, 'ListRoleInterface', $data);
+        }
 
         foreach ($unreferenced as $method) {
             $msg = 'Unreferenced RoleMethod "%s"';
             $data = [$method->fullName()];
-            $this->parser_warning($msg, $method->start(), 'UnreferencedRoleMethod', $data);    
+            $this->parser_warning($msg, $method->start(), 'UnreferencedRoleMethod', $data);
         }
 
         foreach ($outsideRef as $method) {
             $msg = 'RoleMethod "%s" has no references outside its Role and can be made private.';
             $data = [$method->fullName()];
-            $this->parser_warning($msg, $method->start(), 'NoExternalRoleMethodReferences', $data);    
+            $this->parser_warning($msg, $method->start(), 'NoExternalRoleMethodReferences', $data);
         }
     }
 }

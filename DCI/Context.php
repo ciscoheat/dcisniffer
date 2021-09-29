@@ -120,7 +120,10 @@ final class Ref {
     private bool $_isAssignment;
     public function isAssignment() { return $this->_isAssignment; }
 
-    public function __construct(string $to, int $pos, int $type, bool $isAssignment) {
+    private ?string $_calls; 
+    public function calls() { return $this->_calls; }
+
+    public function __construct(string $to, int $pos, int $type, bool $isAssignment, ?string $calls) {
         assert(strlen($to) > 0, "Empty property Ref");
         assert($pos > 0, "Invalid pos: $pos");
         assert($type == self::ROLE || $type == self::ROLEMETHOD, "Invalid type: $type");
@@ -130,5 +133,6 @@ final class Ref {
         $this->_pos = $pos;
         $this->_type = $type;
         $this->_isAssignment = $isAssignment;
+        $this->_calls = $calls;
     }
 }
