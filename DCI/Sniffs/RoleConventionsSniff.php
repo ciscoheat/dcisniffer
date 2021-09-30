@@ -119,16 +119,16 @@ final class RoleConventionsSniff implements Sniff {
     private array $tokens;
 
     protected function tokens_current() {
-        return $this->tokens_at($this->_stackPtr);
+        return $this->tokens_get($this->_stackPtr);
     }
 
-    protected function tokens_at(int $ptr) {
+    protected function tokens_get(int $ptr) {
         return $this->tokens[$ptr];
     }
 
     private File $parser;
 
-    private function parser_tokens() {
+    private function parser_tokens() : array {
         return $this->parser->getTokens();
     }
     
@@ -140,7 +140,7 @@ final class RoleConventionsSniff implements Sniff {
         );
     }
 
-    protected function parser_addError($msg, $pos, $error, $data = null) {
+    protected function parser_addError($msg, $pos, $error, $data = null) : void {
         $this->parser->addError($msg, $pos, $error, $data);
     }
 
@@ -156,7 +156,7 @@ final class RoleConventionsSniff implements Sniff {
 
         if($tagged && $classPos = $this->parser_findNext(T_CLASS)) {
             // New class found
-            $class = $this->tokens_at($classPos);
+            $class = $this->tokens_get($classPos);
             return new Context($class['scope_opener'], $class['scope_closer']);
         }
 
@@ -191,7 +191,7 @@ final class RoleConventionsSniff implements Sniff {
         return null;
     }
 
-    protected function parser_checkForIgnoredRole() {
+    protected function parser_checkForIgnoredRole() : void {
         $current = $this->tokens_current();
 
         if($current['code'] == T_DOC_COMMENT_TAG) {
@@ -205,7 +205,7 @@ final class RoleConventionsSniff implements Sniff {
         }
     }
 
-    private function parser_checkForRoleDefinition() {
+    private function parser_checkForRoleDefinition() : void {
         $current = $this->tokens_current();
 
         if(!$this->currentMethod_exists() &&
@@ -215,7 +215,7 @@ final class RoleConventionsSniff implements Sniff {
         ) {
             // Check if it's a Role definition
             if($rolePos = $this->parser_findNext(T_VARIABLE)) {
-                $name = substr($this->tokens_at($rolePos)['content'], 1);
+                $name = substr($this->tokens_get($rolePos)['content'], 1);
                 
                 // Check if normal var or a Role
                 if(preg_match($this->roleFormat, $name)) {
@@ -233,7 +233,7 @@ final class RoleConventionsSniff implements Sniff {
         $this->parser_checkForReferences();
     }
 
-    private function parser_checkForReferences() {
+    private function parser_checkForReferences() : void {
         if(!$this->currentMethod_exists()) return;
 
         $current = $this->tokens_current();
@@ -246,7 +246,7 @@ final class RoleConventionsSniff implements Sniff {
 
             // Check for assignment, or direct access
             while($isAssignment === null) {
-                $code = $this->tokens_at(++$checkPos)['code'];
+                $code = $this->tokens_get(++$checkPos)['code'];
 
                 if(array_key_exists($code, Tokens::$emptyTokens)) {
                     continue;
@@ -255,7 +255,7 @@ final class RoleConventionsSniff implements Sniff {
                 if($code == T_OBJECT_OPERATOR) {
                     // Role access: $this->someRole->objMethod
                     $isAssignment = false;
-                    $objectAccess = $this->tokens_at($checkPos + 1);
+                    $objectAccess = $this->tokens_get($checkPos + 1);
                 } else {
                     // Check assignment: $this->someRole = ...
                     $isAssignment = array_key_exists($code, Tokens::$assignmentTokens);
@@ -267,12 +267,12 @@ final class RoleConventionsSniff implements Sniff {
                 // Probably a Role reference "$this->someRole".
                 // Allow outside its RoleMethods if an @ is prepended.
                 // Used for instantiating other Contexts.
-                $prevToken = $this->tokens_at($this->_stackPtr - 1);
+                $prevToken = $this->tokens_get($this->_stackPtr - 1);
                 if($prevToken['code'] == T_ASPERAND) 
                     return;
             }
 
-            $name = $this->tokens_at($varPos)['content'];
+            $name = $this->tokens_get($varPos)['content'];
             $this->currentMethod_addRef($name, $varPos, $isAssignment, $objectAccess);
         }
     }
@@ -285,7 +285,7 @@ final class RoleConventionsSniff implements Sniff {
         return !!$this->currentMethod;
     }
 
-    protected function currentMethod_addRef(string $to, int $pos, bool $isAssignment, $objectAccess) {
+    protected function currentMethod_addRef(string $to, int $pos, bool $isAssignment, $objectAccess) : void {
         if(in_array($to, $this->_ignoredRoles)) return;
 
         $isRoleMethod = !!preg_match($this->roleMethodFormat, $to);
@@ -328,7 +328,7 @@ final class RoleConventionsSniff implements Sniff {
         return $this->context->end();
     }
 
-    protected function context_addRole(string $name, int $pos, int $access) {
+    protected function context_addRole(string $name, int $pos, int $access) : Role {
         if($access != T_PRIVATE) {
             $msg = 'Role "%s" must be private.';
             $data = [$name];
@@ -341,7 +341,7 @@ final class RoleConventionsSniff implements Sniff {
         return $role;
     }
 
-    protected function context_addMethod(string $name, int $start, int $end, int $access) {
+    protected function context_addMethod(string $name, int $start, int $end, int $access) : Method {
         $method = new Method($name, $start, $end, $access);        
         $isRoleMethod = preg_match($this->roleMethodFormat, $name, $matches);
 
