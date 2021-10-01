@@ -47,7 +47,6 @@ final class RoleConventionsSniff implements Sniff {
 
     ///// State ///////////////////////////////////////////
 
-    private bool $_ignoreNextRole = false;
     private array $_ignoredRoles = [];
     private array $_addMethodToRole = [];
     private int $_stackPtr;
@@ -84,7 +83,7 @@ final class RoleConventionsSniff implements Sniff {
         //if(!file_exists('e:\temp\tokens.json')) file_put_contents('e:\temp\tokens.json', json_encode($tokens, JSON_PRETTY_PRINT));
 
         if(!$this->currentMethod_exists())
-            $this->context_checkForIgnoredRole();
+            $this->context_checkForRoleDefinition();
         else
             $this->currentMethod_checkForReferences();
     }
@@ -141,14 +140,6 @@ final class RoleConventionsSniff implements Sniff {
         if($start === null) $start = $this->_stackPtr;
 
         return $this->parser->findNext(
-            $type, $start, null, false, $value, $local
-        );
-    }
-
-    protected function parser_findPrevious($type, int $start = null, ?string $value = null, bool $local = true) {
-        if($start === null) $start = $this->_stackPtr;
-
-        return $this->parser->findPrevious(
             $type, $start, null, false, $value, $local
         );
     }
@@ -336,21 +327,7 @@ final class RoleConventionsSniff implements Sniff {
         return $method;
     }
 
-    protected function context_checkForIgnoredRole() : void {
-        $current = $this->tokens_current();
-
-        if($current['code'] == T_DOC_COMMENT_TAG) {
-            $tag = strtolower($current['content']);
-            
-            if(in_array($tag, ['@norole', '@nodcirole', '@ignorerole', '@ignoredcirole'])) {
-                $this->_ignoreNextRole = true;
-            }
-        } else {
-            $this->context_checkForRoleDefinition();
-        }
-    }
-
-    private function context_checkForRoleDefinition() : void {
+    protected function context_checkForRoleDefinition() : void {
         $current = $this->tokens_current();
 
         if(!in_array($current['code'], [T_PRIVATE, T_PROTECTED, T_PUBLIC]))
@@ -362,23 +339,24 @@ final class RoleConventionsSniff implements Sniff {
             
             // Check if normal var or a Role
             if(preg_match($this->roleFormat, $name)) {
-                if(!$this->_ignoreNextRole) {
-                    $tags = [];
-                    $pos = $this->_stackPtr;
-                    do {
-                        $token = $this->tokens_get(--$pos);
-        
-                        if($token['code'] == T_DOC_COMMENT_TAG) {
-                            $tags[] = substr($token['content'], 1);
-                        }        
-                    } while($token['code'] == T_WHITESPACE || array_key_exists($token['code'], Tokens::$commentTokens));
-                
-                    $this->context_addRole($name, $rolePos, $current['code'], $tags);
-                    return;
-                } else {
-                    $this->_ignoreNextRole = false;
-                    $this->_ignoredRoles[] = $name;
-                }
+                $tags = [];
+                $pos = $this->_stackPtr;
+                do {
+                    $token = $this->tokens_get(--$pos);
+    
+                    if($token['code'] == T_DOC_COMMENT_TAG) {
+                        $tag = substr($token['content'], 1);
+
+                        if(in_array(strtolower($tag), ['norole', 'nodcirole', 'ignorerole', 'ignoredcirole'])) {
+                            $this->_ignoredRoles[] = $name;
+                            return;
+                        }
+
+                        $tags[] = $tag;
+                    }        
+                } while($token['code'] == T_WHITESPACE || array_key_exists($token['code'], Tokens::$commentTokens));
+
+                $this->context_addRole($name, $rolePos, $current['code'], $tags);
             }
         }
     }

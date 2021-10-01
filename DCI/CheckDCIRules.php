@@ -213,6 +213,7 @@ final class CheckDCIRules {
         }
 
         foreach ($outsideRef as $method) {
+            if(in_array($method, $unreferenced)) continue;
             $msg = 'RoleMethod "%s" has no references outside its Role and can be made private.';
             $data = [$method->fullName()];
             $this->parser_warning($msg, $method->start(), 'NoExternalRoleMethodReferences', $data);
