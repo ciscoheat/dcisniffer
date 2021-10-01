@@ -83,7 +83,10 @@ final class RoleConventionsSniff implements Sniff {
 
         //if(!file_exists('e:\temp\tokens.json')) file_put_contents('e:\temp\tokens.json', json_encode($tokens, JSON_PRETTY_PRINT));
 
-        $this->parser_checkForIgnoredRole();
+        if(!$this->currentMethod_exists())
+            $this->context_checkForIgnoredRole();
+        else
+            $this->currentMethod_checkForReferences();
     }
 
     /**
@@ -126,16 +129,26 @@ final class RoleConventionsSniff implements Sniff {
         return $this->tokens[$ptr];
     }
 
+    ///////////////////////////////////////////////////////
+
     private File $parser;
 
     private function parser_tokens() : array {
         return $this->parser->getTokens();
     }
     
-    private function parser_findNext($type, int $start = null, ?string $value = null, bool $local = true) {
+    protected function parser_findNext($type, int $start = null, ?string $value = null, bool $local = true) {
         if($start === null) $start = $this->_stackPtr;
 
         return $this->parser->findNext(
+            $type, $start, null, false, $value, $local
+        );
+    }
+
+    protected function parser_findPrevious($type, int $start = null, ?string $value = null, bool $local = true) {
+        if($start === null) $start = $this->_stackPtr;
+
+        return $this->parser->findPrevious(
             $type, $start, null, false, $value, $local
         );
     }
@@ -183,63 +196,38 @@ final class RoleConventionsSniff implements Sniff {
             $funcNamePos = $this->parser_findNext(T_STRING, $funcPos);
             $funcName = $tokens[$funcNamePos]['content'];
 
+            $tags = [];
+            $pos = $this->_stackPtr;
+            do {
+                $token = $this->tokens_get(--$pos);
+
+                if($token['code'] == T_DOC_COMMENT_TAG)
+                    $tags[] = substr($token['content'], 1);
+            } while($token['code'] == T_WHITESPACE || array_key_exists($token['code'], Tokens::$commentTokens));
+
             return $this->context_addMethod(
-                $funcName, $funcPos, $funcToken['scope_closer'], $current['code']
+                $funcName, $funcPos, $funcToken['scope_closer'], $current['code'], $tags
             );
         }
 
         return null;
     }
 
-    protected function parser_checkForIgnoredRole() : void {
-        $current = $this->tokens_current();
+    /////////////////////////////////////////////////////////////////
 
-        if($current['code'] == T_DOC_COMMENT_TAG) {
-            $tag = strtolower($current['content']);
-            
-            if(in_array($tag, ['@norole', '@nodcirole', '@ignorerole', '@ignoredcirole'])) {
-                $this->_ignoreNextRole = true;
-            }
-        } else {
-            $this->parser_checkForRoleDefinition();
-        }
+    private ?Method $currentMethod = null;
+    
+    protected function currentMethod_exists() : bool {
+        return !!$this->currentMethod;
     }
 
-    private function parser_checkForRoleDefinition() : void {
+    protected function currentMethod_checkForReferences() : void {
         $current = $this->tokens_current();
 
-        if(!$this->currentMethod_exists() &&
-            ($current['code'] == T_PRIVATE ||
-            $current['code'] == T_PROTECTED ||
-            $current['code'] == T_PUBLIC)
-        ) {
-            // Check if it's a Role definition
-            if($rolePos = $this->parser_findNext(T_VARIABLE)) {
-                $name = substr($this->tokens_get($rolePos)['content'], 1);
-                
-                // Check if normal var or a Role
-                if(preg_match($this->roleFormat, $name)) {
-                    if(!$this->_ignoreNextRole) {
-                        $this->context_addRole($name, $rolePos, $current['code']);
-                        return;
-                    } else {
-                        $this->_ignoreNextRole = false;
-                        $this->_ignoredRoles[] = $name;
-                    }
-                }
-            }
-        }
-
-        $this->parser_checkForReferences();
-    }
-
-    private function parser_checkForReferences() : void {
-        if(!$this->currentMethod_exists()) return;
-
-        $current = $this->tokens_current();
+        if($current['content'] != '$this') return;
 
         // Check if a Role or RoleMethod is referenced.
-        if($current['content'] == '$this' && $varPos = $this->parser_findNext(T_STRING)) {
+        if($varPos = $this->parser_findNext(T_STRING)) {
             $isAssignment = null;
             $objectAccess = null;
             $checkPos = $varPos;
@@ -277,15 +265,7 @@ final class RoleConventionsSniff implements Sniff {
         }
     }
 
-    /////////////////////////////////////////////////////////////////
-
-    private ?Method $currentMethod = null;
-    
-    protected function currentMethod_exists() : bool {
-        return !!$this->currentMethod;
-    }
-
-    protected function currentMethod_addRef(string $to, int $pos, bool $isAssignment, $objectAccess) : void {
+    private function currentMethod_addRef(string $to, int $pos, bool $isAssignment, $objectAccess) : void {
         if(in_array($to, $this->_ignoredRoles)) return;
 
         $isRoleMethod = !!preg_match($this->roleMethodFormat, $to);
@@ -328,21 +308,21 @@ final class RoleConventionsSniff implements Sniff {
         return $this->context->end();
     }
 
-    protected function context_addRole(string $name, int $pos, int $access) : Role {
+    private function context_addRole(string $name, int $pos, int $access, array $tags) : Role {
         if($access != T_PRIVATE) {
             $msg = 'Role "%s" must be private.';
             $data = [$name];
             $this->parser_addError($msg, $pos, 'RoleNotPrivate', $data);
         }
         
-        $role = new Role($name, $pos, $access);
+        $role = new Role($name, $pos, $access, $tags);
         $this->context->addRole($role);
 
         return $role;
     }
 
-    protected function context_addMethod(string $name, int $start, int $end, int $access) : Method {
-        $method = new Method($name, $start, $end, $access);        
+    protected function context_addMethod(string $name, int $start, int $end, int $access, array $tags) : Method {
+        $method = new Method($name, $start, $end, $access, $tags);
         $isRoleMethod = preg_match($this->roleMethodFormat, $name, $matches);
 
         if($isRoleMethod) {
@@ -354,6 +334,53 @@ final class RoleConventionsSniff implements Sniff {
         $this->context->addMethod($method);
 
         return $method;
+    }
+
+    protected function context_checkForIgnoredRole() : void {
+        $current = $this->tokens_current();
+
+        if($current['code'] == T_DOC_COMMENT_TAG) {
+            $tag = strtolower($current['content']);
+            
+            if(in_array($tag, ['@norole', '@nodcirole', '@ignorerole', '@ignoredcirole'])) {
+                $this->_ignoreNextRole = true;
+            }
+        } else {
+            $this->context_checkForRoleDefinition();
+        }
+    }
+
+    private function context_checkForRoleDefinition() : void {
+        $current = $this->tokens_current();
+
+        if(!in_array($current['code'], [T_PRIVATE, T_PROTECTED, T_PUBLIC]))
+            return;
+
+        // Check if it's a Role definition
+        if($rolePos = $this->parser_findNext(T_VARIABLE)) {
+            $name = substr($this->tokens_get($rolePos)['content'], 1);
+            
+            // Check if normal var or a Role
+            if(preg_match($this->roleFormat, $name)) {
+                if(!$this->_ignoreNextRole) {
+                    $tags = [];
+                    $pos = $this->_stackPtr;
+                    do {
+                        $token = $this->tokens_get(--$pos);
+        
+                        if($token['code'] == T_DOC_COMMENT_TAG) {
+                            $tags[] = substr($token['content'], 1);
+                        }        
+                    } while($token['code'] == T_WHITESPACE || array_key_exists($token['code'], Tokens::$commentTokens));
+                
+                    $this->context_addRole($name, $rolePos, $current['code'], $tags);
+                    return;
+                } else {
+                    $this->_ignoreNextRole = false;
+                    $this->_ignoredRoles[] = $name;
+                }
+            }
+        }
     }
 
     protected function context_checkIfEnds() : bool {

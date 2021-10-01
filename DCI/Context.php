@@ -47,10 +47,14 @@ final class Role {
     private array $_methods = [];
     public function methods() { return $this->_methods; }
 
-    public function __construct(string $name, int $pos, int $access) {
+    private array $_tags = [];
+    public function tags() { return $this->_tags; }
+
+    public function __construct(string $name, int $pos, int $access, array $tags) {
         $this->_name = $name;
         $this->_pos = $pos;
         $this->_access = $access;
+        $this->_tags = $tags;
     }
 
     public function addMethod(string $name, Method $method) {
@@ -78,7 +82,10 @@ final class Method {
     private ?Role $_role = null;
     public function role() { return $this->_role; }
 
-    public function __construct(string $fullName, int $start, int $end, int $access) {
+    private array $_tags = [];
+    public function tags() { return $this->_tags; }
+
+    public function __construct(string $fullName, int $start, int $end, int $access, array $tags) {
         assert(strlen($fullName) > 0, "Empty Method name");
         assert($start > 0, 'Invalid start pos');
         assert($end > $start, 'Invalid end pos');
@@ -88,6 +95,7 @@ final class Method {
         $this->_start = $start;
         $this->_end = $end;
         $this->_access = $access;
+        $this->_tags = $tags;
     }
 
     public function addRef(Ref $ref) {
