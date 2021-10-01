@@ -8,6 +8,7 @@ use PHP_CodeSniffer\Util\Tokens;
 
 require_once __DIR__ . '/../Context.php';
 require_once __DIR__ . '/../CheckDCIRules.php';
+require_once __DIR__ . '/../ListContextInformation.php';
 
 use PHP_CodeSniffer\Standards\DCI\Context;
 use PHP_CodeSniffer\Standards\DCI\Role;
@@ -15,6 +16,7 @@ use PHP_CodeSniffer\Standards\DCI\Method;
 use PHP_CodeSniffer\Standards\DCI\Ref;
 
 use PHP_CodeSniffer\Standards\DCI\CheckDCIRules;
+use PHP_CodeSniffer\Standards\DCI\ListContextInformation;
 
 /**
  * @context
@@ -29,16 +31,6 @@ final class RoleConventionsSniff implements Sniff {
      * @noDCIRole
      */
     public string $roleMethodFormat = '/^([a-zA-Z0-9]+)_+([a-zA-Z0-9]+)$/';
-
-    /**
-     * @noDCIRole
-     */
-    public ?string $listCallsInRoleMethod = null;
-
-    /**
-     * @noDCIRole
-     */
-    public ?string $listCallsToRoleMethod = null;
 
     /**
      * @noDCIRole
@@ -144,7 +136,7 @@ final class RoleConventionsSniff implements Sniff {
         );
     }
 
-    protected function parser_addError($msg, $pos, $error, $data = null) : void {
+    protected function parser_error($msg, $pos, $error, $data = null) : void {
         $this->parser->addError($msg, $pos, $error, $data);
     }
 
@@ -299,13 +291,7 @@ final class RoleConventionsSniff implements Sniff {
         return $this->context->end();
     }
 
-    private function context_addRole(string $name, int $pos, int $access, array $tags) : Role {
-        if($access != T_PRIVATE) {
-            $msg = 'Role "%s" must be private.';
-            $data = [$name];
-            $this->parser_addError($msg, $pos, 'RoleNotPrivate', $data);
-        }
-        
+    private function context_addRole(string $name, int $pos, int $access, array $tags) : Role {        
         $role = new Role($name, $pos, $access, $tags);
         $this->context->addRole($role);
 
@@ -379,11 +365,15 @@ final class RoleConventionsSniff implements Sniff {
 
     private function context_checkRules() : void {
         $this->context_attachMethodsToRoles();
+        
         (new CheckDCIRules(
-            @$this->parser, @$this->context, 
-            $this->listCallsInRoleMethod, $this->listCallsToRoleMethod,
-            $this->listRoleInterfaces
+            @$this->parser, @$this->context
         ))->check();
+
+        (new ListContextInformation(
+            @$this->parser, @$this->context,
+            $this->listRoleInterfaces
+        ))->listInformation();
     }
 
     private function context_attachMethodsToRoles() : void {
@@ -396,7 +386,7 @@ final class RoleConventionsSniff implements Sniff {
             } else {
                 $msg = 'Role "%s" does not exist. Add it as "private $%s;" above this RoleMethod.';
                 $data = [$attach->roleName, $attach->roleName];
-                $this->parser_addError($msg, $attach->method->start(), 'NonExistingRole', $data);
+                $this->parser_error($msg, $attach->method->start(), 'NonExistingRole', $data);
             }
         }
         $this->_addMethodToRole = [];

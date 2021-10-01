@@ -15,26 +15,14 @@ use PHP_CodeSniffer\Standards\DCI\Ref;
  * @context
  */
 final class CheckDCIRules {
-    public function __construct(File $file, Context $context, ?string $listCallsIn = null, ?string $listCallsTo = null, bool $listRoleInterfaces = false) {
+    public function __construct(File $file, Context $context) {
         $this->parser = $file;
         $this->context = $context;
-        $this->_listCallsInRoleMethod = $listCallsIn;
-        $this->_listCallsToRoleMethod = $listCallsTo;
-        $this->_listRoleInterfaces = $listRoleInterfaces;
     }
 
     public function check() {
         $this->context_checkRules();
     }
-
-    // Supplied from RoleConventionsSniff
-    private ?string $_listCallsInRoleMethod = null;
-
-    // Supplied from RoleConventionsSniff
-    private ?string $_listCallsToRoleMethod = null;
-
-    // Supplied from RoleConventionsSniff
-    private ?bool $_listRoleInterfaces = false;
 
     ///// Roles ///////////////////////////////////////////
 
@@ -42,10 +30,6 @@ final class CheckDCIRules {
 
     protected function parser_error(string $msg, int $pos, string $errorCode, ?array $data = null) {
         $this->parser->addError($msg, $pos, $errorCode, $data);
-    }
-
-    protected function parser_warning(string $msg, int $pos, string $errorCode, ?array $data = null) {
-        $this->parser->addWarning($msg, $pos, $errorCode, $data);
     }
 
     private $context;
@@ -77,7 +61,7 @@ final class CheckDCIRules {
             if($role && ($method->start() < $start || $method->start() > $end)) {
                 $msg = 'RoleMethod "%s" must be positioned below its Role.';
                 $data = [$method->fullName()];
-                $this->parser_error($msg, $method->start(), 'RoleMethodPosition', $data);
+                $this->parser_error($msg, $method->start(), 'InvalidRoleMethodPosition', $data);
             }
         }
     }
@@ -85,28 +69,25 @@ final class CheckDCIRules {
     protected function context_checkRules() {
         $this->context_checkRoleMethodPositions();
 
-        $assignedPos = 0;
-        $listMethodsToCount = 0;
-        $listRoleInterfaces = [];
+        $assignedPos = 0;        
+        $accessedOutside = [];
 
-        $unreferenced = array_filter($this->context->methods(), function($method) {
-            return !!$method->role();
-        });
-
-        $outsideRef = array_filter($this->context->methods(), function($method) {
-            return $method->role() && $method->access() == T_PROTECTED;
-        });
+        foreach ($this->context->roles() as $role) {
+            if($role->access() != T_PRIVATE) {
+                $msg = 'Role "%s" must be private.';
+                $data = [$role->name()];
+                $this->parser_error($msg, $role->pos(), 'InvalidRoleDefinition', $data);
+            }
+        }
 
         foreach ($this->context->methods() as $method) {
             $assigned = [];
-            $listMethodsInRoleMethod = [];
-
             $role = $method->role();
 
             if($role && $method->access() == T_PUBLIC) {
                 $msg = 'RoleMethod "%s" is public, must be private or protected.';
                 $data = [$method->fullName()];
-                $this->parser_error($msg, $method->start(), 'PublicRoleMethod', $data);
+                $this->parser_error($msg, $method->start(), 'InvalidRoleMethod', $data);
             }
 
             foreach($method->refs() as $ref) {
@@ -118,26 +99,13 @@ final class CheckDCIRules {
                         // Does it reference a Role directly, or a normal method?
                         // A direct reference is allowed only if in one of its RoleMethods
                         if(!$role || $role->name() != $ref->to()) {
-                            $msg = 'Role "%s" accessed outside its RoleMethods';
+                            $msg = 'Role "%s" accessed outside its RoleMethods here.';
                             $data = [$ref->to()];
-                            $this->parser_error($msg, $ref->pos(), 'RoleAccessedOutsideItsMethods', $data);
-                        } else if($this->_listRoleInterfaces) {
-                            $listRoleInterfaces[$ref->to()][] = $ref->calls();
+                            $this->parser_error($msg, $ref->pos(), 'InvalidRoleAccess', $data);
                         }
                     }
                 } else {
                     // References a RoleMethod, check access
-
-                    // Debug feature
-                    if($role && $this->_listCallsInRoleMethod == $method->fullName()) {
-                        $this->parser_warning($ref->to(), $ref->pos(), 'ListInRoleMethods');
-                        $listMethodsInRoleMethod[$ref->to()] = true;
-                    }
-                    if($this->_listCallsToRoleMethod == $ref->to()) {
-                        $this->parser_warning('"%s" calls "%s" here', $ref->pos(), 'ListToRoleMethods', [$method->fullName(), $ref->to()]);
-                        $listMethodsToCount++;
-                    }
-
                     $referenced = $this->context_methodNamed($ref->to());
 
                     if($method->role() != $referenced->role()) {
@@ -146,25 +114,10 @@ final class CheckDCIRules {
 
                             $msg = 'Private RoleMethod "%s" accessed outside its own RoleMethods here.';
                             $this->parser_error($msg, $ref->pos(), 'InvalidRoleMethodAccess', $data);
-
-                            if(isset($unreferenced[$ref->to()])) {
-                                $msg = 'Private RoleMethod "%s" accessed outside its own RoleMethods. Make it protected if this is intended.';
-                                $this->parser_error($msg, $referenced->start(), 'AdjustRoleMethodAccess', $data);
-                            }
-                        } else {
-                            unset($outsideRef[$ref->to()]);
+                            $accessedOutside[] = $ref;
                         }
                     }
-
-                    unset($unreferenced[$ref->to()]);
                 }
-            }
-
-            // Debug feature
-            if(count($listMethodsInRoleMethod) > 0) {
-                $methods = array_keys($listMethodsInRoleMethod);
-                sort($methods);
-                $this->parser_warning($method->fullName() . ': [' . implode(', ', $methods) . ']', $method->start(), 'ListRoleMethods');
             }
 
             if(count($assigned) > 0) {
@@ -174,49 +127,28 @@ final class CheckDCIRules {
                     // Roles were assigned already in another method
                     foreach ($assigned as $ref) {
                         $msg = 'All Roles must be bound inside a single method.';
-                        $this->parser_error($msg, $ref->pos(), 'RolesNotBoundInSingleMethod');
+                        $this->parser_error($msg, $ref->pos(), 'InvalidRoleBinding');
 
                         $msg = 'Method where roles are currently bound.';
-                        $this->parser_error($msg, $assignedPos, 'RolesNotBoundInSingleMethod');
+                        $this->parser_error($msg, $assignedPos, 'InvalidRoleBinding');
                     }
                 }
                 else if(count($assigned) < count($roleNames)) {
                     $missing = array_diff($roleNames, array_keys($assigned));
                     $msg = 'All Roles must be bound inside a single method. Missing: %s';
                     $data = [join(", ", $missing)];
-                    $this->parser_error($msg, $method->start(), 'RolesNotBoundInSingleMethod', $data);
+                    $this->parser_error($msg, $method->start(), 'InvalidRoleBinding', $data);
                 } else {
                     $assignedPos = $method->start();
                 }
             }
         }
 
-        // Debug feature
-        if($this->_listCallsToRoleMethod && array_key_exists($this->_listCallsToRoleMethod, $this->context->methods())) {
-            $method = $this->context->methods()[$this->_listCallsToRoleMethod];
-            $this->parser_warning('%u call(s) to %s', $method->start(), 'ListToRoleMethods', [$listMethodsToCount, $method->fullName()]);
-        }
-        foreach($listRoleInterfaces as $role => $methods) {
-            $rolePos = $this->context->roles()[$role]->pos();
-            $methods = array_filter(array_unique($methods), function($a) {
-                return !!$a;
-            });
-            $msg = 'RoleInterface for %s: [%s]';
-            $data = [$role, implode(', ', $methods)];
-            $this->parser_warning($msg, $rolePos, 'ListRoleInterface', $data);
-        }
-
-        foreach ($unreferenced as $method) {
-            $msg = 'Unreferenced RoleMethod "%s"';
+        foreach ($accessedOutside as $ref) {
+            $method = $this->context_methodNamed($ref->to());
             $data = [$method->fullName()];
-            $this->parser_warning($msg, $method->start(), 'UnreferencedRoleMethod', $data);
-        }
-
-        foreach ($outsideRef as $method) {
-            if(in_array($method, $unreferenced)) continue;
-            $msg = 'RoleMethod "%s" has no references outside its Role and can be made private.';
-            $data = [$method->fullName()];
-            $this->parser_warning($msg, $method->start(), 'NoExternalRoleMethodReferences', $data);
+            $msg = 'Private RoleMethod "%s" accessed outside its own RoleMethods. Make it protected if this is intended.';
+            $this->parser_error($msg, $method->start(), 'InvalidRoleMethodAccess', $data);
         }
     }
 }
