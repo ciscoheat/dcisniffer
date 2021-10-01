@@ -124,10 +124,6 @@ final class RoleConventionsSniff implements Sniff {
 
     private File $parser;
 
-    private function parser_tokens() : array {
-        return $this->parser->getTokens();
-    }
-    
     protected function parser_findNext($type, int $start = null, ?string $value = null, bool $local = true) {
         if($start === null) $start = $this->_stackPtr;
 
@@ -163,7 +159,6 @@ final class RoleConventionsSniff implements Sniff {
         if(!$this->context_exists()) return null;
         if($this->currentMethod_exists()) return null;
 
-        $tokens = $this->parser_tokens();
         $current = $this->tokens_current();
 
         if($current['code'] != T_PRIVATE &&
@@ -174,10 +169,10 @@ final class RoleConventionsSniff implements Sniff {
 
         // Check if it's a method
         if($funcPos = $this->parser_findNext(T_FUNCTION)) {                    
-            $funcToken = $tokens[$funcPos];
+            $funcToken = $this->tokens_get($funcPos);
 
             $funcNamePos = $this->parser_findNext(T_STRING, $funcPos);
-            $funcName = $tokens[$funcNamePos]['content'];
+            $funcName = $this->tokens_get($funcNamePos)['content'];
 
             $tags = [];
             $pos = $this->_stackPtr;
