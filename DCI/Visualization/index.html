@@ -4,7 +4,7 @@
     <meta charset="utf-8"/>
     <title>Context visualization</title>
 
-    <link rel="stylesheet" type="text/css" href="./vis/vis-network.min.css" />
+    <link rel="stylesheet" type="text/css" href="vis/vis-network.min.css" />
     <style>
         /* Reset */
         html {
@@ -41,11 +41,11 @@
 <body>
     <div id="mynetwork"></div>
 
-    <script type="text/javascript" src="./vis/vis-data.min.js"></script>
-    <script type="text/javascript" src="./vis/vis-network.min.js"></script>
+    <script type="text/javascript" src="vis/vis-data.min.js"></script>
+    <script type="text/javascript" src="vis/vis-network.min.js"></script>
 
     <script type="text/javascript">
-        fetch("./RoleConventionsSniff.json")
+        fetch("RoleConventionsSniff.json")
         .then(response => response.json())
         .then(json => {
             const roles = new Set(json.nodes.map(node => node.group))
