@@ -3,6 +3,9 @@
 namespace PHP_CodeSniffer\Standards\DCI;
 
 final class Context {
+    private string $_name;
+    public function name() : string { return $this->_name; }
+
     private int $_start;
     public function start() : int { return $this->_start; }
 
@@ -15,12 +18,13 @@ final class Context {
     private array $_methods = [];
     public function methods() : array { return $this->_methods; }
 
-    public function __construct(int $start, int $end) {
+    public function __construct(string $name, int $start, int $end) {
         assert($start > 0, 'Invalid start pos');
         assert($end > $start, 'Invalid end pos');
 
         $this->_start = $start;
         $this->_end = $end;
+        $this->_name = $name;
     }
 
     ///////////////////////////////////////////////////////

@@ -1,0 +1,162 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <title>Context visualization</title>
+
+    <link rel="stylesheet" type="text/css" href="./vis/vis-network.min.css" />
+    <style>
+        /* Reset */
+        html {
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        
+        *, *:before, *:after {
+            box-sizing: inherit;
+        }
+        
+        body, h1, h2, h3, h4, h5, h6, p, ol, ul {
+            margin: 0;
+            padding: 0;
+            font-weight: normal;
+        }
+        
+        ol, ul {
+            list-style: none;
+        }
+        
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        /* Page CSS */
+        #mynetwork {
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="mynetwork"></div>
+
+    <script type="text/javascript" src="./vis/vis-data.min.js"></script>
+    <script type="text/javascript" src="./vis/vis-network.min.js"></script>
+
+    <script type="text/javascript">
+        fetch("./RoleConventionsSniff.json")
+        .then(response => response.json())
+        .then(json => {
+            const roles = new Set(json.nodes.map(node => node.group))
+
+            const data = {
+                nodes: new vis.DataSet(json.nodes.map((node, index, arr) => {
+                    const angle = 2 * Math.PI * (index / arr.length + 0.75);
+                    node.x = 500 * Math.cos(angle);
+                    node.y = 500 * Math.sin(angle);
+                    return node;
+                })),
+                edges: new vis.DataSet(json.edges)
+            }
+            
+            const options = {
+                physics: false,
+                nodes: {
+                    shape: 'dot',
+                    font: {
+                        size: 16
+                    }
+                },
+                edges: {
+                    arrows: 'to'
+                },
+                groups: {
+                    '__CONTEXT': {
+                        shape: 'box',
+                        shapeProperties: {
+                            borderRadius: 1
+                        },
+                        color: '#bbb',
+                        font: {
+                            size: 18
+                        }
+                    }
+                }
+            }
+            
+            const container = document.getElementById("mynetwork")
+            const network = new vis.Network(container, data, options)
+
+            // Update node border based on connected edges
+            const nodeWidths = data.nodes.get()
+            .map(node => ({
+                id: node.id,
+                borderWidth: network.getConnectedEdges(node.id).length,
+                borderWidthSelected: network.getConnectedEdges(node.id).length
+            }))
+
+            data.nodes.updateOnly(nodeWidths)
+
+            /*
+            roles.forEach(role => {
+                if(role == '__CONTEXT') return
+                network.cluster({
+                    joinCondition: node => node.group == role,
+                    clusterNodeProperties: {
+                        id: role,
+                        label: role
+                    }
+                })
+            })
+            */
+
+            const getNodeEdges = (filter) => data.nodes
+                .get({ filter: filter })
+                .map(n => n.id)
+                .flatMap(id => network.getConnectedEdges(id))
+
+            const toggleNodeEdges = (params, allInRole = true) => {
+                if(params.nodes.length == 0) {
+                    const visible = getNodeEdges(n => true)
+                    .map(id => ({
+                        id: id,
+                        hidden: false
+                    }))
+                    data.edges.updateOnly(visible)
+                    return
+                }
+
+                const id = params.nodes[0]
+                const node = data.nodes.get(id)
+
+                const filter1 = allInRole
+                    ? n => n.group == node.group
+                    : n => n.id == id
+
+                const filter2 = allInRole
+                    ? n => n.group != node.group
+                    : n => n.id != id
+
+                const visible = getNodeEdges(filter1)
+                .map(id => ({
+                    id: id,
+                    hidden: false
+                }))
+
+                const hidden = getNodeEdges(filter2)
+                .map(id => ({
+                    id: id,
+                    hidden: true
+                }))
+
+                data.edges.updateOnly(hidden)
+                data.edges.updateOnly(visible)
+            }
+
+            network.on("click", params => toggleNodeEdges(params, true))
+            network.on("doubleClick", params => toggleNodeEdges(params, false))
+        })
+    </script>
+</body>
+</html>

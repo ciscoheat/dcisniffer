@@ -9,6 +9,7 @@ use PHP_CodeSniffer\Util\Tokens;
 require_once __DIR__ . '/../Context.php';
 require_once __DIR__ . '/../CheckDCIRules.php';
 require_once __DIR__ . '/../ListContextInformation.php';
+require_once __DIR__ . '/../ContextVisualization.php';
 
 use PHP_CodeSniffer\Standards\DCI\Context;
 use PHP_CodeSniffer\Standards\DCI\Role;
@@ -17,6 +18,7 @@ use PHP_CodeSniffer\Standards\DCI\Ref;
 
 use PHP_CodeSniffer\Standards\DCI\CheckDCIRules;
 use PHP_CodeSniffer\Standards\DCI\ListContextInformation;
+use PHP_CodeSniffer\Standards\DCI\ContextVisualization;
 
 /**
  * @context
@@ -37,6 +39,11 @@ final class RoleConventionsSniff implements Sniff {
      */
     public bool $listRoleInterfaces = false;
 
+    /**
+     * @noDCIRole
+     */
+    public string $visDataDir = __DIR__ . '/../Visualization';
+
     ///// State ///////////////////////////////////////////
 
     private array $_ignoredRoles = [];
@@ -44,6 +51,7 @@ final class RoleConventionsSniff implements Sniff {
     private int $_stackPtr;
     
     ///// Methods /////////////////////////////////////////
+
 
     /**
      * Returns the token types that this sniff is interested in.
@@ -68,7 +76,7 @@ final class RoleConventionsSniff implements Sniff {
      * @return void
      */
     public function process(File $file, $stackPtr) {   
-     
+    
         if($this->_rebind($file, $stackPtr) || !$this->context_exists()) 
             return;
 
@@ -149,7 +157,8 @@ final class RoleConventionsSniff implements Sniff {
         if($tagged && $classPos = $this->parser_findNext(T_CLASS)) {
             // New class found
             $class = $this->tokens_get($classPos);
-            return new Context($class['scope_opener'], $class['scope_closer']);
+            $name = $this->parser->getDeclarationName($classPos);
+            return new Context($name, $class['scope_opener'], $class['scope_closer']);
         }
 
         return null;
@@ -369,7 +378,15 @@ final class RoleConventionsSniff implements Sniff {
             @$this->parser, @$this->context,
             $this->listRoleInterfaces
         ))->listInformation();
+
+        if($this->visDataDir) {
+            (new ContextVisualization(
+                @$this->parser, @$this->context,
+                $this->visDataDir
+            ))->saveVisData();
+        }
     }
+
 
     private function context_attachMethodsToRoles() : void {
         $roles = $this->context->roles();
