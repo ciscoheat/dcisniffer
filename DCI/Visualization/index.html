@@ -53,8 +53,9 @@
             const data = {
                 nodes: new vis.DataSet(json.nodes.map((node, index, arr) => {
                     const angle = 2 * Math.PI * (index / arr.length + 0.75);
-                    node.x = 500 * Math.cos(angle);
-                    node.y = 500 * Math.sin(angle);
+                    const radius = 225 + arr.length * 10
+                    node.x = radius * Math.cos(angle);
+                    node.y = radius * Math.sin(angle);
                     return node;
                 })),
                 edges: new vis.DataSet(json.edges)
@@ -92,8 +93,9 @@
             const nodeWidths = data.nodes.get()
             .map(node => ({
                 id: node.id,
-                borderWidth: network.getConnectedEdges(node.id).length,
-                borderWidthSelected: network.getConnectedEdges(node.id).length
+                borderWidth: data.edges.get({filter: e => e.to == node.id}).length,
+                borderWidthSelected: data.edges.get({filter: e => e.to == node.id}).length,
+                size: 20 + data.edges.get({filter: e => e.from == node.id}).length * 3
             }))
 
             data.nodes.updateOnly(nodeWidths)
@@ -111,51 +113,56 @@
             })
             */
 
-            const getNodeEdges = (filter) => data.nodes
-                .get({ filter: filter })
+            const getNodeEdges = (filter = null) => data.nodes
+                .get({ filter: filter || (n => true) })
                 .map(n => n.id)
                 .flatMap(id => network.getConnectedEdges(id))
 
-            const toggleNodeEdges = (params, allInRole = true) => {
-                if(params.nodes.length == 0) {
-                    const visible = getNodeEdges(n => true)
+            const displayNodeEdges = (filter, display) =>
+                data.edges.updateOnly(
+                    getNodeEdges(filter)
                     .map(id => ({
                         id: id,
-                        hidden: false
+                        hidden: !display
                     }))
-                    data.edges.updateOnly(visible)
+                )
+
+            const connectedNodes = (edgeIdList) =>
+                edgeIdList.flatMap(e => 
+                    network.getConnectedNodes(e)
+                )
+
+            const displayEdges = (nodeIdList, onlyExactNodes) => {
+                const nodes = data.nodes.get(nodeIdList)
+
+                const filter = onlyExactNodes
+                    ? n => nodes.some(n2 => n2.id == n.id)
+                    : n => nodes.some(selected => selected.group == n.group)
+
+                displayNodeEdges(null, false)
+                displayNodeEdges(filter, true)
+            }
+
+            let lastClick = 0
+            const addToSelection = (params) => {
+                const isDoubleClick = Date.now() - lastClick < 500
+                lastClick = Date.now()
+
+                const nodeId = network.getNodeAt(params.pointer.DOM)
+                const edgeId = network.getEdgeAt(params.pointer.DOM)
+
+                if(!nodeId && !edgeId) {
+                    displayNodeEdges(null, true)
                     return
                 }
 
-                const id = params.nodes[0]
-                const node = data.nodes.get(id)
-
-                const filter1 = allInRole
-                    ? n => n.group == node.group
-                    : n => n.id == id
-
-                const filter2 = allInRole
-                    ? n => n.group != node.group
-                    : n => n.id != id
-
-                const visible = getNodeEdges(filter1)
-                .map(id => ({
-                    id: id,
-                    hidden: false
-                }))
-
-                const hidden = getNodeEdges(filter2)
-                .map(id => ({
-                    id: id,
-                    hidden: true
-                }))
-
-                data.edges.updateOnly(hidden)
-                data.edges.updateOnly(visible)
+                displayEdges(
+                    nodeId ? [nodeId] : network.getConnectedNodes(edgeId),
+                    isDoubleClick
+                )
             }
 
-            network.on("click", params => toggleNodeEdges(params, true))
-            network.on("doubleClick", params => toggleNodeEdges(params, false))
+            network.on("click", addToSelection)
         })
     </script>
 </body>
