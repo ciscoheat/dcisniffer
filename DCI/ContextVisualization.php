@@ -36,8 +36,9 @@ final class ContextVisualization {
 
         foreach ($this->methods as $method) {            
             $role = $method->role();
+            $refs = $method->refs();
 
-            if(!$role && count($method->refs()) == 0) continue;
+            if(!$role && !count($refs)) continue;
 
             $node = (object)[
                 'id' => $method->fullName(),
@@ -47,9 +48,8 @@ final class ContextVisualization {
                 'group' => $role ? $role->name() : '__CONTEXT'
             ];
 
-            $nodes[] = $node;
-            
-            foreach($method->refs() as $ref) {
+            $hasEdge = false;
+            foreach($refs as $ref) {
 
                 if($ref->type() == Ref::ROLE) {
                     // TODO: Role references
@@ -60,8 +60,12 @@ final class ContextVisualization {
                     ];
 
                     $edges[$edge->from . $edge->to] = $edge;
+                    $hasEdge = true;
                 }
             }
+
+            if($role || $hasEdge) $nodes[] = $node;
+
         } // end foreach methods
 
         $this->methods_saveData((object)[
