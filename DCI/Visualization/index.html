@@ -113,40 +113,43 @@
             })
             */
 
+            const displayEdges = (edgeIds, display = true) => data.edges
+                .updateOnly(
+                    edgeIds.map(id => ({
+                        id: id,
+                        hidden: !display
+                    }))
+                )
+
             const getNodeEdges = (filter = null) => data.nodes
                 .get({ filter: filter || (n => true) })
                 .map(n => n.id)
                 .flatMap(id => network.getConnectedEdges(id))
 
             const displayNodeEdges = (filter, display) =>
-                data.edges.updateOnly(
-                    getNodeEdges(filter)
-                    .map(id => ({
-                        id: id,
-                        hidden: !display
-                    }))
-                )
+                displayEdges(getNodeEdges(filter), display)
 
             const connectedNodes = (edgeIdList) =>
                 edgeIdList.flatMap(e => 
                     network.getConnectedNodes(e)
                 )
 
-            const displayEdges = (nodeIdList, onlyExactNodes) => {
+            const displayEdgesForNodes = (nodeIdList, onlyExactNodes) => {
                 const nodes = data.nodes.get(nodeIdList)
 
                 const filter = onlyExactNodes
                     ? n => nodes.some(n2 => n2.id == n.id)
                     : n => nodes.some(selected => selected.group == n.group)
 
-                displayNodeEdges(null, false)
                 displayNodeEdges(filter, true)
             }
 
-            let lastClick = 0
+            let lastClick = [0, 0]
             const addToSelection = (params) => {
-                const isDoubleClick = Date.now() - lastClick < 500
-                lastClick = Date.now()
+                const isDoubleClick = Date.now() - lastClick[0] < 500
+                const isTripleClick = isDoubleClick && Date.now() - lastClick[1] < 600
+                lastClick.unshift(Date.now())
+                lastClick.pop()
 
                 const nodeId = network.getNodeAt(params.pointer.DOM)
                 const edgeId = network.getEdgeAt(params.pointer.DOM)
@@ -156,9 +159,30 @@
                     return
                 }
 
-                displayEdges(
-                    nodeId ? [nodeId] : network.getConnectedNodes(edgeId),
-                    isDoubleClick
+                // Hide all edges before displaying the selected ones
+                displayNodeEdges(null, false)
+
+                if(nodeId && isTripleClick) {
+                    displayEdges(uniPath(nodeId))
+                } else {
+                    displayEdgesForNodes(
+                        nodeId ? [nodeId] : network.getConnectedNodes(edgeId),
+                        isDoubleClick
+                    )
+                }
+            }
+
+            const uniPath = (nodeId, visitedIds = []) => {
+                visitedIds.push(nodeId)
+
+                const edges = data.edges
+                .get(network.getConnectedEdges(nodeId))
+                .filter(e => e.from == nodeId)
+
+                return edges.map(e => e.id).concat(
+                    edges
+                    .filter(e => !visitedIds.includes(e.to))
+                    .flatMap(edge => uniPath(edge.to, visitedIds))
                 )
             }
 
