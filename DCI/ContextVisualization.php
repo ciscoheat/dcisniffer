@@ -59,14 +59,14 @@ final class ContextVisualization {
                         'to' => $ref->to()
                     ];
 
-                    $edges[] = $edge;
+                    $edges[$edge->from . $edge->to] = $edge;
                 }
             }
         } // end foreach methods
 
         $this->methods_saveData((object)[
             'nodes' => $nodes,
-            'edges' => $edges
+            'edges' => array_values($edges)
         ]);
     }
 
