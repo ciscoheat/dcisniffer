@@ -59,7 +59,7 @@ final class ContextVisualization {
                         'to' => $ref->to()
                     ];
 
-                    $edges[$edge->from . $edge->to] = $edge;
+                    $edges[] = $edge;
                     $hasEdge = true;
                 }
             }

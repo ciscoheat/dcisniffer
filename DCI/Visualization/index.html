@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8"/>
-    <title>Context visualization</title>
+    <title>DCI Context visualization</title>
 
     <link rel="stylesheet" type="text/css" href="vis/vis-network.min.css" />
     <style>
@@ -44,149 +44,17 @@
     <script type="text/javascript" src="vis/vis-data.min.js"></script>
     <script type="text/javascript" src="vis/vis-network.min.js"></script>
 
-    <script type="text/javascript">
+    <script type="text/javascript" src="visualizecontext.js"></script>
+    
+    <script>
         fetch("RoleConventionsSniff.json")
         .then(response => response.json())
         .then(json => {
-            const roles = new Set(json.nodes.map(node => node.group))
+            const visualize = new VisualizeContext(
+                json.nodes, json.edges, document.querySelector('#mynetwork')
+            )
 
-            const data = {
-                nodes: new vis.DataSet(json.nodes.map((node, index, arr) => {
-                    const angle = 2 * Math.PI * (index / arr.length + 0.75);
-                    const radius = 225 + arr.length * 10
-                    node.x = radius * Math.cos(angle);
-                    node.y = radius * Math.sin(angle);
-                    return node;
-                })),
-                edges: new vis.DataSet(json.edges)
-            }
-            
-            const options = {
-                physics: false,
-                nodes: {
-                    shape: 'dot',
-                    font: {
-                        size: 16
-                    }
-                },
-                edges: {
-                    arrows: 'to'
-                },
-                groups: {
-                    '__CONTEXT': {
-                        shape: 'box',
-                        shapeProperties: {
-                            borderRadius: 1
-                        },
-                        color: '#bbb',
-                        font: {
-                            size: 18
-                        }
-                    }
-                }
-            }
-            
-            const container = document.getElementById("mynetwork")
-            const network = new vis.Network(container, data, options)
-
-            // Update node border based on connected edges
-            const nodeWidths = data.nodes.get()
-            .map(node => ({
-                id: node.id,
-                borderWidth: data.edges.get({filter: e => e.to == node.id}).length,
-                borderWidthSelected: data.edges.get({filter: e => e.to == node.id}).length,
-                size: 20 + data.edges.get({filter: e => e.from == node.id}).length * 3
-            }))
-
-            data.nodes.updateOnly(nodeWidths)
-
-            /*
-            roles.forEach(role => {
-                if(role == '__CONTEXT') return
-                network.cluster({
-                    joinCondition: node => node.group == role,
-                    clusterNodeProperties: {
-                        id: role,
-                        label: role
-                    }
-                })
-            })
-            */
-
-            const displayEdges = (edgeIds, display = true) => data.edges
-                .updateOnly(
-                    edgeIds.map(id => ({
-                        id: id,
-                        hidden: !display
-                    }))
-                )
-
-            const getNodeEdges = (filter = null) => data.nodes
-                .get({ filter: filter || (n => true) })
-                .map(n => n.id)
-                .flatMap(id => network.getConnectedEdges(id))
-
-            const displayNodeEdges = (filter, display) =>
-                displayEdges(getNodeEdges(filter), display)
-
-            const connectedNodes = (edgeIdList) =>
-                edgeIdList.flatMap(e => 
-                    network.getConnectedNodes(e)
-                )
-
-            const displayEdgesForNodes = (nodeIdList, onlyExactNodes) => {
-                const nodes = data.nodes.get(nodeIdList)
-
-                const filter = onlyExactNodes
-                    ? n => nodes.some(n2 => n2.id == n.id)
-                    : n => nodes.some(selected => selected.group == n.group)
-
-                displayNodeEdges(filter, true)
-            }
-
-            let lastClick = [0, 0]
-            const addToSelection = (params) => {
-                const isDoubleClick = Date.now() - lastClick[0] < 500
-                const isTripleClick = isDoubleClick && Date.now() - lastClick[1] < 600
-                lastClick.unshift(Date.now())
-                lastClick.pop()
-
-                const nodeId = network.getNodeAt(params.pointer.DOM)
-                const edgeId = network.getEdgeAt(params.pointer.DOM)
-
-                if(!nodeId && !edgeId) {
-                    displayNodeEdges(null, true)
-                    return
-                }
-
-                // Hide all edges before displaying the selected ones
-                displayNodeEdges(null, false)
-
-                if(nodeId && isTripleClick) {
-                    displayEdges(uniPath(nodeId))
-                } else {
-                    displayEdgesForNodes(
-                        nodeId ? [nodeId] : network.getConnectedNodes(edgeId),
-                        isDoubleClick
-                    )
-                }
-            }
-
-            const uniPath = (nodeId, visitedIds = []) => {
-                visitedIds.push(nodeId)
-
-                const edges = data.edges
-                .get(network.getConnectedEdges(nodeId))
-                .filter(e => e.from == nodeId)
-
-                return edges.map(e => e.id).concat(
-                    edges
-                    .filter(e => !visitedIds.includes(e.to))
-                    .flatMap(edge => uniPath(edge.to, visitedIds))
-                )
-            }
-
-            network.on("click", addToSelection)
+            visualize.start()
         })
     </script>
 </body>
