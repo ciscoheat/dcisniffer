@@ -33,6 +33,9 @@ class VisualizeContext {
 
             return {
                 id: node.id,
+                shape: node.group != '__CONTEXT' 
+                    ? (nodeEdgesFrom.length > 0 ? 'dot' : 'diamond')
+                    : null,
                 borderWidth: borderWidth,
                 borderWidthSelected: borderWidth,
                 size: 20 + nodeEdgesFrom.length * 3
@@ -198,12 +201,17 @@ class VisualizeContext {
     protected nodes_uniPathFrom(nodeId: vis.IdType, visitedIds: vis.IdType[] = []) : vis.IdType[] {
         visitedIds.push(nodeId)
 
-        const fromEdges = this.edges
+        const fromEdges = (nodeId) => this.edges
         .get(this.network_connectedEdges(nodeId))
         .filter(e => e.from == nodeId)
 
-        return fromEdges.map(e => e.id).concat(
-            fromEdges
+        const allEdges = fromEdges(nodeId)
+
+        const addEdges = allEdges
+        .filter(e => fromEdges(e.to).length > 0)
+
+        return addEdges.map(e => e.id).concat(
+            allEdges
             .filter(e => !visitedIds.includes(e.to))
             .flatMap(e => this.nodes_uniPathFrom(e.to, visitedIds))
         )
