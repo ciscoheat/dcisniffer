@@ -4,33 +4,12 @@ enum Clicks {
     Triple
 }
 
-class Toolbar {
-    constructor(container: HTMLElement, context) {
-        this.context = context
-
-        const interactions : HTMLFormElement = container.querySelector('#interactions')
-        interactions.addEventListener(
-            'click', () => this.onlyInteractions = interactions.checked
-        )
-        this._onlyInteractions = interactions.checked
-    }
-
-    private context : {
-        redraw() : void
-    }
-
-    private _onlyInteractions: boolean;
-
-    public get onlyInteractions() { return this._onlyInteractions }
-
-    public set onlyInteractions(state) { 
-        this._onlyInteractions = state
-        this.context.redraw()
-    }
+type VisualizeContextState = {
+    onlyInteractions: boolean
 }
 
 class VisualizeContext {
-    constructor(nodes: vis.Node[], edges: vis.Edge[], container: HTMLElement, toolbar: HTMLElement) {
+    constructor(nodes: vis.Node[], edges: vis.Edge[], container: HTMLElement, initialState?: VisualizeContextState) {
         //this.roles = new Set(nodes.map(node => node.group))
 
         const nodeSet = this.nodes = new vis.DataSet(nodes.map((node, index, arr) => {
@@ -70,7 +49,7 @@ class VisualizeContext {
             }
         }))
 
-        const options = {
+        const networkOptions = {
             physics: false,
             nodes: {
                 shape: 'dot',
@@ -99,26 +78,42 @@ class VisualizeContext {
         this.network = new vis.Network(container, {
             nodes: nodeSet,
             edges: edgeSet
-        }, options as any)
+        }, networkOptions as any)
 
-        this.toolbar = new Toolbar(toolbar, this)
+        this._state = Object.assign({
+            onlyInteractions: false
+        }, initialState || {})
 
         this.clicks = [0, 0]
         
     } // end constructor
 
-    private _getterNodes : vis.IdType[] = []
-
+    
     ///// System operations /////////////////////////////////////////
-
+    
     start() {        
         const network = this.network as vis.Network
-        network.on("click", () => this.redraw())
+        network.on("click", () => {
+            this.network_displaySelection(this.clicks_track())
+        })
+        this.redraw()
+    }
+
+    setState(state: VisualizeContextState) {
+        this._state = state
         this.redraw()
     }
 
     redraw() {
-        this.network_displaySelection()
+        this.network_displaySelection(Clicks.Single)
+    }
+
+    ///// State /////////////////////////////////////////////////////
+    
+    private _getterNodes : vis.IdType[] = []
+
+    private _state : {
+        onlyInteractions: boolean
     }
 
     ///// Roles /////////////////////////////////////////////////////
@@ -150,7 +145,7 @@ class VisualizeContext {
             hidden: !display
         }))
         
-        if(display && this.toolbar_onlyInteractions()) {
+        if(display && this._state.onlyInteractions) {
             // Only display edges for nodes that are selected
             // or isn't a getter node.
             const selection = this.network_selectedNodes()
@@ -198,7 +193,7 @@ class VisualizeContext {
         return this.network.getSelection().nodes
     }
 
-    protected network_displaySelection() {
+    protected network_displaySelection(modifier : Clicks) {
         const selected = this.network.getSelection()
 
         if(selected.nodes.length == 0 && selected.edges.length == 0) {
@@ -209,10 +204,9 @@ class VisualizeContext {
         // Hide all edges before displaying the selected ones
         this.edges_hideAll()
 
-        const clicks = this.clicks_track()
-        const onlyExactNodes = clicks == Clicks.Single
+        const onlyExactNodes = modifier == Clicks.Single
 
-        if(selected.nodes.length > 0 && clicks == Clicks.Triple) {
+        if(selected.nodes.length > 0 && modifier == Clicks.Triple) {
             this.edges_display(
                 selected.nodes.flatMap(
                     nodeId => this.nodes_uniPathFrom(nodeId)
@@ -280,15 +274,5 @@ class VisualizeContext {
             .filter(e => !visitedIds.includes(e.to))
             .flatMap(e => this.nodes_uniPathFrom(e.to, visitedIds))
         )
-    }
-
-    ///// tools ///////////////////////////////////////////
-
-    private toolbar: {
-        onlyInteractions: boolean
-    }
-
-    protected toolbar_onlyInteractions() {
-        return this.toolbar.onlyInteractions
     }
 }
