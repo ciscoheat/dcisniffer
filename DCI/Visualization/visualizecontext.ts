@@ -31,6 +31,9 @@ class VisualizeContext {
             const uniqueEdges = (edges) => new Set(edges.map(e => e.from + e.to))
             const borderWidth = uniqueEdges(nodeEdgesTo).size * 1.5
 
+            if(nodeEdgesFrom.length == 0)
+                this._getterNodes.push(node.id)
+
             return {
                 id: node.id,
                 shape: node.group != '__CONTEXT' 
@@ -73,15 +76,26 @@ class VisualizeContext {
             edges: edgeSet
         }, options as any)
 
+        this.tools = {
+            interactions: false
+        }
+
         this.clicks = [0, 0]
         
     } // end constructor
 
+    private _getterNodes : vis.IdType[] = []
+
     ///// System operations /////////////////////////////////////////
 
-    start() {
+    start() {        
         const network = this.network as vis.Network
         network.on("click", params => this.network_addToSelection(params))
+        this.edges_displayAll()
+    }
+
+    setInteractions(state: boolean) {
+        this.tools_setInteractions(state)
     }
 
     ///// Roles /////////////////////////////////////////////////////
@@ -107,12 +121,25 @@ class VisualizeContext {
         if(edgeIds == null)
             edgeIds = this.edges.get().map(e => e.id)
 
-        this.edges.update(
-            edgeIds.map(id => ({
+        let updates : {id: vis.IdType, hidden: boolean}[] = []
+        
+        if(this.tools.interactions) {
+            updates = this.edges.get(edgeIds)
+            .map(e => {
+                const filterInteraction = display
+                return {
+                    id: e.id,
+                    hidden: filterInteraction ? this._getterNodes.includes(e.to) : !display
+                }
+            })
+        } else {
+            updates = edgeIds.map(id => ({
                 id: id,
                 hidden: !display
             }))
-        )
+        }
+
+        this.edges.update(updates)
     }
 
     ///// clicks //////////////////////////////////////////
@@ -132,6 +159,10 @@ class VisualizeContext {
         return nrClicks
     }
 
+    ///// selected ////////////////////////////////////////
+
+    private _selected: vis.Node | null
+
     ///// network /////////////////////////////////////////
 
     private network: {
@@ -149,6 +180,8 @@ class VisualizeContext {
             this.edges_displayAll()
             return
         }
+
+        this._selected = nodeId ? this.nodes_get(nodeId) : null
 
         // Hide all edges before displaying the selected ones
         this.edges_hideAll()
@@ -174,9 +207,14 @@ class VisualizeContext {
     ///// nodes ///////////////////////////////////////////
 
     private nodes: {
-        get(options?: vis.DataSelectionOptions<vis.Node>): vis.Node[];
+        get(id: vis.IdType, options?: vis.DataSelectionOptions<vis.Node>): vis.Node | null;
         get(ids: vis.IdType[], options?: vis.DataSelectionOptions<vis.Node>): vis.Node[];
+        get(options?: vis.DataSelectionOptions<vis.Node>): vis.Node[];
         //update(data: vis.Node | vis.Node[], senderId?: vis.IdType): vis.IdType[];
+    }
+
+    protected nodes_get(id: vis.IdType) : vis.Node {
+        return this.nodes.get(id)
     }
 
     protected nodes_displayEdgesFor(nodeIdList: vis.IdType[], onlyExactNodes: boolean) : void {
@@ -215,5 +253,16 @@ class VisualizeContext {
             .filter(e => !visitedIds.includes(e.to))
             .flatMap(e => this.nodes_uniPathFrom(e.to, visitedIds))
         )
+    }
+
+    ///// tools ///////////////////////////////////////////
+
+    private tools: {
+        interactions: boolean
+    }
+
+    protected tools_setInteractions(state: boolean) {
+        this.tools.interactions = state
+        this.edges_displayAll()
     }
 }

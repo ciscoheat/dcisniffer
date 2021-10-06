@@ -32,13 +32,23 @@
         }
 
         /* Page CSS */
+        #toolbar {
+            width: 100vw;
+            height: 30px;
+            background-color: aliceblue;
+            padding: 3px;
+        }
+
         #mynetwork {
             width: 100vw;
-            height: 100vh;
+            height: calc(100vh - 30px);
         }
     </style>
 </head>
 <body>
+    <div id="toolbar">
+        <input type="checkbox" id="interactions"> Interactions only
+    </div>
     <div id="mynetwork"></div>
 
     <script type="text/javascript" src="vis/vis-data.min.js"></script>
@@ -51,10 +61,15 @@
         .then(response => response.json())
         .then(json => {
             const visualize = new VisualizeContext(
-                json.nodes, json.edges, document.querySelector('#mynetwork')
+                json.nodes, json.edges, 
+                document.querySelector('#mynetwork')
             )
 
             visualize.start()
+            const interactions = document.querySelector('#interactions')
+            interactions.addEventListener(
+                'click', e => visualize.setInteractions(interactions.checked)
+            )
         })
     </script>
 </body>
