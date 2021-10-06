@@ -4,7 +4,7 @@
     <meta charset="utf-8"/>
     <title>DCI Context visualization</title>
 
-    <link rel="stylesheet" type="text/css" href="vis/vis-network.min.css" />
+    <link rel="stylesheet" type="text/css" href="vendor/vis-network.min.css" />
     <style>
         /* Reset */
         html {
@@ -51,12 +51,13 @@
     </div>
     <div id="mynetwork"></div>
 
-    <script type="text/javascript" src="vis/mithril.min.js"></script>
+    <script type="text/javascript" src="vendor/mithril.min.js"></script>
 
-    <script type="text/javascript" src="vis/vis-data.min.js"></script>
-    <script type="text/javascript" src="vis/vis-network.min.js"></script>
+    <script type="text/javascript" src="vendor/vis-data.min.js"></script>
+    <script type="text/javascript" src="vendor/vis-network.min.js"></script>
 
     <script type="text/javascript" src="visualizecontext.js"></script>
+    <script type="text/javascript" src="app.js"></script>
     
     <script>
         fetch("RoleConventionsSniff.json")

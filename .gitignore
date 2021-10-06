@@ -1,4 +1,4 @@
-/DCI/Visualization/*.json
 /DCI/Visualization/node_modules
-/DCI/Visualization/visualizecontext.js
-/DCI/Visualization/visualizecontext.js.map
+/DCI/Visualization/app/*.json
+/DCI/Visualization/app/visualizecontext.js
+/DCI/Visualization/app/visualizecontext.js.map

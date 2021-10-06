@@ -42,7 +42,7 @@ final class RoleConventionsSniff implements Sniff {
     /**
      * @noDCIRole
      */
-    public string $visDataDir = __DIR__ . '/../Visualization';
+    public string $visDataDir = __DIR__ . '/../Visualization/app';
 
     ///// State ///////////////////////////////////////////
 

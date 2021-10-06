@@ -1,0 +1,24 @@
+{
+  "name": "dcisniffer",
+  "version": "0.1.0",
+  "description": "DCI linter conventions",
+  "main": "index.js",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/mithril": "^2.0.8",
+    "@types/vis": "^4.21.22"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ciscoheat/dcisniffer.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ciscoheat/dcisniffer/issues"
+  },
+  "homepage": "https://github.com/ciscoheat/dcisniffer#readme"
+}
