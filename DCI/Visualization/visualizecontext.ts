@@ -126,10 +126,11 @@ class VisualizeContext {
     ///// edges ///////////////////////////////////////////
 
     private edges: {
-        get()
-        get(options?: vis.DataSelectionOptions<vis.Edge>): vis.Edge[];
-        get(ids: vis.IdType[], options?: vis.DataSelectionOptions<vis.Edge>): vis.Edge[];
-        update(data: vis.Edge | vis.Edge[], senderId?: vis.IdType): vis.IdType[];
+        get() : vis.Edge[]
+        get(id: vis.IdType, options?: vis.DataSelectionOptions<vis.Edge>): vis.Edge | null;
+        get(ids: vis.IdType[], options?: vis.DataSelectionOptions<vis.Edge>): vis.Edge[]
+        get(options?: vis.DataSelectionOptions<vis.Edge>): vis.Edge[]
+        update(data: vis.Edge | vis.Edge[], senderId?: vis.IdType): vis.IdType[]
     }
 
     protected edges_displayAll() : void {
@@ -144,22 +145,25 @@ class VisualizeContext {
         if(edgeIds == null)
             edgeIds = this.edges.get().map(e => e.id)
 
-        let updates : {id: vis.IdType, hidden: boolean}[] = []
+        let updates = edgeIds.map(id => ({
+            id: id,
+            hidden: !display
+        }))
         
-        if(this.toolbar.onlyInteractions) {
-            updates = this.edges.get(edgeIds)
-            .map(e => {
-                const filterInteraction = display
-                return {
-                    id: e.id,
-                    hidden: filterInteraction ? this._getterNodes.includes(e.to) : !display
+        if(display && this.toolbar_onlyInteractions()) {
+            // Only display edges for nodes that are selected
+            // or isn't a getter node.
+            const selection = this.network_selectedNodes()
+
+            updates.forEach(u => {
+                const edge = this.edges.get(u.id)
+
+                if(!selection.includes(edge.to) &&
+                    this._getterNodes.includes(edge.to)
+                ) {
+                    u.hidden = true
                 }
             })
-        } else {
-            updates = edgeIds.map(id => ({
-                id: id,
-                hidden: !display
-            }))
         }
 
         this.edges.update(updates)
@@ -185,11 +189,13 @@ class VisualizeContext {
     ///// network /////////////////////////////////////////
 
     private network: {
-        getNodeAt(pos: vis.Position) : vis.IdType
-        getEdgeAt(pos: vis.Position) : vis.IdType
         getConnectedNodes(nodeOrEdgeId: vis.IdType, direction?: vis.DirectionType): vis.IdType[] | Array<{ fromId: vis.IdType, toId: vis.IdType }>;
         getConnectedEdges(nodeId: vis.IdType): vis.IdType[];
         getSelection(): { nodes: vis.IdType[], edges: vis.IdType[] };
+    }
+
+    protected network_selectedNodes() {
+        return this.network.getSelection().nodes
     }
 
     protected network_displaySelection() {
@@ -245,22 +251,16 @@ class VisualizeContext {
     protected nodes_displayEdgesFor(nodeIdList: vis.IdType[], onlyExactNodes: boolean) : void {
         const nodes = this.nodes.get(nodeIdList)
 
-        console.log(onlyExactNodes)
-
         const filter = onlyExactNodes
             ? n => nodes.some(n2 => n2.id == n.id)
             : n => nodes.some(selected => selected.group == n.group)
 
-        this.nodes__filterAndDisplayEdges(filter)
-    }
-
-    private nodes__filterAndDisplayEdges(filter: (n: vis.Node) => boolean, visible = true) : void {
         const edges = this.nodes
         .get({ filter: filter })
         .map(n => n.id)
         .flatMap(id => this.network_connectedEdges(id))
 
-        this.edges_display(edges, visible)
+        this.edges_display(edges)
     }
 
     protected nodes_uniPathFrom(nodeId: vis.IdType, visitedIds: vis.IdType[] = []) : vis.IdType[] {
@@ -288,7 +288,7 @@ class VisualizeContext {
         onlyInteractions: boolean
     }
 
-    protected tools_setInteractions(state: boolean) {
-        this.toolbar.onlyInteractions = state
+    protected toolbar_onlyInteractions() {
+        return this.toolbar.onlyInteractions
     }
 }
