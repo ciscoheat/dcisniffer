@@ -1,14 +1,23 @@
 {
   "name": "dcisniffer",
   "version": "0.1.0",
-  "description": "DCI linter conventions",
+  "description": "DCI Context visualization",
   "main": "index.js",
-  "dependencies": {},
+  "dependencies": {
+    "keycharm": "^0.4.0",
+    "mithril": "^2.0.4",
+    "vis-data": "^7.1.2",
+    "vis-network": "^9.1.0",
+    "vis-util": "^5.0.2"
+  },
   "devDependencies": {
+    "@types/hammerjs": "^2.0.40",
     "@types/mithril": "^2.0.8",
-    "@types/vis": "^4.21.22"
+    "snowpack": "^3.8.8"
   },
   "scripts": {
+    "start": "snowpack dev",
+    "build": "snowpack build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

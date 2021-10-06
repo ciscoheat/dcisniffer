@@ -1,5 +1,4 @@
 import {DataInterfaceGetOptions, DataSet} from 'vis-data'
-import { Id } from 'vis-data/declarations/data-interface'
 import {Network, IdType, Node, Edge, DirectionType} from 'vis-network'
 
 enum Clicks {

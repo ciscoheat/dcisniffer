@@ -1,62 +1,42 @@
 import m from 'mithril'
 import { VisualizeContext, VisualizeContextState } from './visualizecontext'
 
-class App implements m.ClassComponent<VisualizeContextState> {
-    state: VisualizeContextState
-    visualizer: VisualizeContext
+const state : VisualizeContextState = {
+    onlyInteractions: false
+}
 
-    constructor(state) {
-        this.state = state
-    }
+let visualizer : VisualizeContext | null = null;
 
-    update(changeState: () => void) {
-        changeState()
-        if(this.visualizer)
-            this.visualizer.redraw()
-    }
+const update = () => {
+    if(visualizer) visualizer.setState(state)
+}
 
-    view() { 
-        return m('#app', [
-            m('#toolbar', [
-                m('input[type=checkbox]', {
-                    checked: this.state.onlyInteractions,
-                    onclick: e => this.update(() => 
-                        this.state.onlyInteractions = e.target.checked
-                    )
-                }),
-                "Display interactions only"
-            ]),
-            m('#mynetwork', {
-                oncreate: async (vnode : m.VnodeDOM) => {
-                    const json = await fetch("RoleConventionsSniff.json")
-                        .then(response => response.json())
+const App = {
+    view: () => m('#app', {
+        onupdate: () => update()
+    }, [
+        m('#toolbar', [
+            m('input[type=checkbox]', {
+                checked: state.onlyInteractions,
+                onclick: e => state.onlyInteractions = e.target.checked
+            }),
+            "Display interactions only"
+        ]),
+        m('#mynetwork', {
+            oncreate: async (vnode : m.VnodeDOM) => {
+                const json = await fetch("RoleConventionsSniff.json")
+                    .then(response => response.json())
 
-                    this.visualizer = new VisualizeContext(
-                        json.nodes, 
-                        json.edges, 
-                        vnode.dom as HTMLElement
-                    )
-        
-                    this.visualizer.start()
-                }
-            })
-        ])
-    }
+                visualizer = new VisualizeContext(
+                    json.nodes, 
+                    json.edges, 
+                    vnode.dom as HTMLElement
+                )
+    
+                visualizer.start()
+            }
+        })
+    ])
 }
 
 m.mount(document.body, App)
-
-/*
-        fetch("RoleConventionsSniff.json")
-        .then(response => response.json())
-        .then(json => {
-            const visualize = new VisualizeContext(
-                json.nodes, 
-                json.edges, 
-                document.querySelector('#mynetwork'),
-                document.querySelector('#toolbar')
-            )
-
-            visualize.start()
-        })
-*/

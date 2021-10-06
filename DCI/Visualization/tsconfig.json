@@ -1,8 +1,10 @@
 {    
     "compilerOptions": {
         "target": "ES2019",
-        "module": "CommonJS",
-        "sourceMap": true
+        "module": "ES6",
+        "sourceMap": true,
+        "esModuleInterop": true,
+        "moduleResolution": "Node",
     },
     "exclude": [
         "node_modules"
