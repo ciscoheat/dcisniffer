@@ -61,15 +61,13 @@
         .then(response => response.json())
         .then(json => {
             const visualize = new VisualizeContext(
-                json.nodes, json.edges, 
-                document.querySelector('#mynetwork')
+                json.nodes, 
+                json.edges, 
+                document.querySelector('#mynetwork'),
+                document.querySelector('#toolbar')
             )
 
             visualize.start()
-            const interactions = document.querySelector('#interactions')
-            interactions.addEventListener(
-                'click', e => visualize.setInteractions(interactions.checked)
-            )
         })
     </script>
 </body>

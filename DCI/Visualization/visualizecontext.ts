@@ -4,8 +4,33 @@ enum Clicks {
     Triple
 }
 
+class Toolbar {
+    constructor(container: HTMLElement, context) {
+        this.context = context
+
+        const interactions : HTMLFormElement = container.querySelector('#interactions')
+        interactions.addEventListener(
+            'click', () => this.onlyInteractions = interactions.checked
+        )
+        this._onlyInteractions = interactions.checked
+    }
+
+    private context : {
+        redraw() : void
+    }
+
+    private _onlyInteractions: boolean;
+
+    public get onlyInteractions() { return this._onlyInteractions }
+
+    public set onlyInteractions(state) { 
+        this._onlyInteractions = state
+        this.context.redraw()
+    }
+}
+
 class VisualizeContext {
-    constructor(nodes: vis.Node[], edges: vis.Edge[], container: HTMLElement) {
+    constructor(nodes: vis.Node[], edges: vis.Edge[], container: HTMLElement, toolbar: HTMLElement) {
         //this.roles = new Set(nodes.map(node => node.group))
 
         const nodeSet = this.nodes = new vis.DataSet(nodes.map((node, index, arr) => {
@@ -76,9 +101,7 @@ class VisualizeContext {
             edges: edgeSet
         }, options as any)
 
-        this.tools = {
-            interactions: false
-        }
+        this.toolbar = new Toolbar(toolbar, this)
 
         this.clicks = [0, 0]
         
@@ -90,12 +113,12 @@ class VisualizeContext {
 
     start() {        
         const network = this.network as vis.Network
-        network.on("click", params => this.network_addToSelection(params))
-        this.edges_displayAll()
+        network.on("click", () => this.redraw())
+        this.redraw()
     }
 
-    setInteractions(state: boolean) {
-        this.tools_setInteractions(state)
+    redraw() {
+        this.network_displaySelection()
     }
 
     ///// Roles /////////////////////////////////////////////////////
@@ -123,7 +146,7 @@ class VisualizeContext {
 
         let updates : {id: vis.IdType, hidden: boolean}[] = []
         
-        if(this.tools.interactions) {
+        if(this.toolbar.onlyInteractions) {
             updates = this.edges.get(edgeIds)
             .map(e => {
                 const filterInteraction = display
@@ -159,10 +182,6 @@ class VisualizeContext {
         return nrClicks
     }
 
-    ///// selected ////////////////////////////////////////
-
-    private _selected: vis.Node | null
-
     ///// network /////////////////////////////////////////
 
     private network: {
@@ -170,32 +189,38 @@ class VisualizeContext {
         getEdgeAt(pos: vis.Position) : vis.IdType
         getConnectedNodes(nodeOrEdgeId: vis.IdType, direction?: vis.DirectionType): vis.IdType[] | Array<{ fromId: vis.IdType, toId: vis.IdType }>;
         getConnectedEdges(nodeId: vis.IdType): vis.IdType[];
+        getSelection(): { nodes: vis.IdType[], edges: vis.IdType[] };
     }
 
-    protected network_addToSelection(params: { pointer: { DOM: vis.Position; }; }) : void {
-        const nodeId = this.network.getNodeAt(params.pointer.DOM)
-        const edgeId = this.network.getEdgeAt(params.pointer.DOM)
+    protected network_displaySelection() {
+        const selected = this.network.getSelection()
 
-        if(!nodeId && !edgeId) {
+        if(selected.nodes.length == 0 && selected.edges.length == 0) {
             this.edges_displayAll()
             return
         }
-
-        this._selected = nodeId ? this.nodes_get(nodeId) : null
 
         // Hide all edges before displaying the selected ones
         this.edges_hideAll()
 
         const clicks = this.clicks_track()
+        const onlyExactNodes = clicks == Clicks.Single
 
-        if(nodeId && clicks == Clicks.Triple) {
-            this.edges_display(this.nodes_uniPathFrom(nodeId))
+        if(selected.nodes.length > 0 && clicks == Clicks.Triple) {
+            this.edges_display(
+                selected.nodes.flatMap(
+                    nodeId => this.nodes_uniPathFrom(nodeId)
+                )
+            )
+        } else if(selected.nodes.length > 0) {
+            // Displaying nodes takes precedence above edges
+            this.nodes_displayEdgesFor(selected.nodes, onlyExactNodes)
         } else {
             this.nodes_displayEdgesFor(
-                nodeId 
-                    ? [nodeId] 
-                    : this.network.getConnectedNodes(edgeId) as vis.IdType[],
-                clicks == Clicks.Double
+                selected.edges.flatMap(edgeId =>
+                    this.network.getConnectedNodes(edgeId) as vis.IdType[]
+                ),
+                onlyExactNodes
             )
         }
     }
@@ -219,6 +244,8 @@ class VisualizeContext {
 
     protected nodes_displayEdgesFor(nodeIdList: vis.IdType[], onlyExactNodes: boolean) : void {
         const nodes = this.nodes.get(nodeIdList)
+
+        console.log(onlyExactNodes)
 
         const filter = onlyExactNodes
             ? n => nodes.some(n2 => n2.id == n.id)
@@ -257,12 +284,11 @@ class VisualizeContext {
 
     ///// tools ///////////////////////////////////////////
 
-    private tools: {
-        interactions: boolean
+    private toolbar: {
+        onlyInteractions: boolean
     }
 
     protected tools_setInteractions(state: boolean) {
-        this.tools.interactions = state
-        this.edges_displayAll()
+        this.toolbar.onlyInteractions = state
     }
 }
