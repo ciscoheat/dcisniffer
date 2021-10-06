@@ -92,31 +92,34 @@ final class CheckDCIRules {
 
             foreach($method->refs() as $ref) {
 
-                if($ref->type() == Ref::ROLE) {
-                    if($ref->isAssignment()) {
+                switch($ref->type()) {
+                    case Ref::ROLE_ASSIGNMENT:
                         $assigned[$ref->to()] = $ref;
-                    } else {
+                        break;
+
+                    case Ref::ROLE:
                         // Does it reference a Role directly, or a normal method?
                         // A direct reference is allowed only if in one of its RoleMethods
-                        if(!$role || $role->name() != $ref->to()) {
+                        if((!$ref->excepted() || $ref->contractCall()) && $role->name() != $ref->to()) {
                             $msg = 'Role "%s" accessed outside its RoleMethods here.';
                             $data = [$ref->to()];
                             $this->parser_error($msg, $ref->pos(), 'InvalidRoleAccess', $data);
                         }
-                    }
-                } else {
-                    // References a RoleMethod, check access
-                    $referenced = $this->context_methodNamed($ref->to());
+                        break;
 
-                    if($method->role() != $referenced->role()) {
-                        if($referenced->access() == T_PRIVATE) {
-                            $data = [$referenced->fullName()];
+                    case Ref::ROLEMETHOD:
+                        $referenced = $this->context_methodNamed($ref->to());
 
-                            $msg = 'Private RoleMethod "%s" accessed outside its own RoleMethods here.';
-                            $this->parser_error($msg, $ref->pos(), 'InvalidRoleMethodAccess', $data);
-                            $accessedOutside[] = $ref;
+                        if($method->role() != $referenced->role()) {
+                            if($referenced->access() == T_PRIVATE) {
+                                $data = [$referenced->fullName()];
+
+                                $msg = 'Private RoleMethod "%s" accessed outside its own RoleMethods here.';
+                                $this->parser_error($msg, $ref->pos(), 'InvalidRoleMethodAccess', $data);
+                                $accessedOutside[] = $ref;
+                            }
                         }
-                    }
+                        break;
                 }
             }
 

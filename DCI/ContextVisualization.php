@@ -51,16 +51,21 @@ final class ContextVisualization {
             $hasEdge = false;
             foreach($refs as $ref) {
 
-                if($ref->type() == Ref::ROLE) {
-                    // TODO: Role references
-                } else {
-                    $edge = (object)[
-                        'from' => $method->fullName(),
-                        'to' => $ref->to()
-                    ];
+                switch($ref->type()) {
+                    case Ref::ROLE:
+                        // TODO: Role references
+                        break;
 
-                    $edges[] = $edge;
-                    $hasEdge = true;
+                    case Ref::METHOD:
+                    case Ref::ROLEMETHOD:
+                        $edge = (object)[
+                            'from' => $method->fullName(),
+                            'to' => $ref->to()
+                        ];
+
+                        $edges[] = $edge;
+                        $hasEdge = true;
+                        break;
                 }
             }
 

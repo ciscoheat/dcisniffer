@@ -117,8 +117,11 @@ final class Method {
 }
 
 final class Ref {
-    const ROLEMETHOD = 0;
-    const ROLE = 1;
+    const METHOD = 0;
+    const PROPERTY = 1;
+    const ROLEMETHOD = 2;
+    const ROLE = 3; // The only type where contractCall can exist
+    const ROLE_ASSIGNMENT = 4;
 
     private string $_to; 
     public function to() { return $this->_to; }
@@ -129,22 +132,29 @@ final class Ref {
     private int $_type;
     public function type() { return $this->_type; }
 
-    private bool $_isAssignment;
-    public function isAssignment() { return $this->_isAssignment; }
+    /**
+     * True if an ampersand is prepended to the reference.
+     */
+    private bool $_excepted;
+    public function excepted() { return $this->_excepted; }
 
-    private ?string $_calls; 
-    public function calls() { return $this->_calls; }
+    /**
+     * Can only exist if type is ROLE.
+     * Can be either a method name, or the special value ARRAY for array access.
+     */
+    private ?string $_contractCall; 
+    public function contractCall() { return $this->_contractCall; }
 
-    public function __construct(string $to, int $pos, int $type, bool $isAssignment, ?string $calls) {
+    public function __construct(string $to, int $pos, int $type, bool $excepted, ?string $contractCall) {
         assert(strlen($to) > 0, "Empty property Ref");
         assert($pos > 0, "Invalid pos: $pos");
-        assert($type == self::ROLE || $type == self::ROLEMETHOD, "Invalid type: $type");
-        assert(!$isAssignment || ($isAssignment && $type == self::ROLE), "Cannot assign to a RoleMethod ($to)");
+        assert($type >= 0 && $type <= 4, "Invalid type: $type");
+        assert($type == 3 || !$contractCall, "contractCall on invalid type: $type");
 
         $this->_to = $to;
         $this->_pos = $pos;
         $this->_type = $type;
-        $this->_isAssignment = $isAssignment;
-        $this->_calls = $calls;
+        $this->_excepted = $excepted;
+        $this->_contractCall = $contractCall;
     }
 }

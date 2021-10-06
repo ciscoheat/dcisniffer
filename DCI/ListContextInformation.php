@@ -68,32 +68,36 @@ final class ListContextInformation {
             $listCallsIn = in_array('listCallsIn', $method->tags());
 
             foreach($method->refs() as $ref) {
-
-                if($ref->type() == Ref::ROLE) {
-                    if(!$ref->isAssignment() && $this->_listRoleInterfaces) {
-                        $listRoleInterfaces[$ref->to()][] = $ref->calls();
-                    }
-                } else {
-                    if($role && $listCallsIn) {
-                        $this->parser_warning($ref->to(), $ref->pos(), 'ListInRoleMethods');
-                        $listMethodsInRoleMethod[$ref->to()] = true;
-                    }
-
-                    if(array_key_exists($ref->to(), $listCallsTo)) {
-                        $data = [$method->fullName(), $ref->to()];
-                        $this->parser_warning('"%s" calls "%s" here', $ref->pos(), 'ListToRoleMethods', $data);
-                        $listCallsTo[$ref->to()]++;
-                    }
-
-                    $referenced = $this->context_methodNamed($ref->to());
-
-                    if($method->role() != $referenced->role()) {
-                        if($referenced->access() != T_PRIVATE) {
-                            unset($outsideRef[$ref->to()]);
+                switch($ref->type()) {
+                    case Ref::ROLE:
+                        if($this->_listRoleInterfaces) {
+                            $listRoleInterfaces[$ref->to()][] = $ref->calls();
                         }
-                    }
+                        break;
 
-                    unset($unreferenced[$ref->to()]);
+                    case Ref::ROLEMETHOD:
+                        if($role && $listCallsIn) {
+                            $this->parser_warning($ref->to(), $ref->pos(), 'ListInRoleMethods');
+                            $listMethodsInRoleMethod[$ref->to()] = true;
+                        }
+    
+                        if(array_key_exists($ref->to(), $listCallsTo)) {
+                            $data = [$method->fullName(), $ref->to()];
+                            $this->parser_warning('"%s" calls "%s" here', $ref->pos(), 'ListToRoleMethods', $data);
+                            $listCallsTo[$ref->to()]++;
+                        }
+    
+                        $referenced = $this->context_methodNamed($ref->to());
+    
+                        if($method->role() != $referenced->role()) {
+                            if($referenced->access() != T_PRIVATE) {
+                                unset($outsideRef[$ref->to()]);
+                            }
+                        }
+    
+                        unset($unreferenced[$ref->to()]);
+                        break;
+
                 }
             }
 
