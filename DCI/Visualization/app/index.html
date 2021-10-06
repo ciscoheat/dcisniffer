@@ -4,7 +4,8 @@
     <meta charset="utf-8"/>
     <title>DCI Context visualization</title>
 
-    <link rel="stylesheet" type="text/css" href="vendor/vis-network.min.css" />
+    <link rel="stylesheet" type="text/css" href="css/vis-network.min.css" />
+    <link rel="icon" type="image/png" href="favicon.png">
     <style>
         /* Reset */
         html {
@@ -46,32 +47,6 @@
     </style>
 </head>
 <body>
-    <div id="toolbar">
-        <input type="checkbox" id="interactions"> Interactions only
-    </div>
-    <div id="mynetwork"></div>
-
-    <script type="text/javascript" src="vendor/mithril.min.js"></script>
-
-    <script type="text/javascript" src="vendor/vis-data.min.js"></script>
-    <script type="text/javascript" src="vendor/vis-network.min.js"></script>
-
-    <script type="text/javascript" src="visualizecontext.js"></script>
-    <script type="text/javascript" src="app.js"></script>
-    
-    <script>
-        fetch("RoleConventionsSniff.json")
-        .then(response => response.json())
-        .then(json => {
-            const visualize = new VisualizeContext(
-                json.nodes, 
-                json.edges, 
-                document.querySelector('#mynetwork'),
-                document.querySelector('#toolbar')
-            )
-
-            visualize.start()
-        })
-    </script>
+    <script type="module" src="app.js"></script>    
 </body>
 </html>

@@ -1,30 +1,35 @@
+import {DataInterfaceGetOptions, DataSet} from 'vis-data'
+import { Id } from 'vis-data/declarations/data-interface'
+import {Network, IdType, Node, Edge, DirectionType} from 'vis-network'
+
 enum Clicks {
     Single = 1,
     Double,
     Triple
 }
 
-type VisualizeContextState = {
+export type VisualizeContextState = {
     onlyInteractions: boolean
 }
 
-class VisualizeContext {
-    constructor(nodes: vis.Node[], edges: vis.Edge[], container: HTMLElement, initialState?: VisualizeContextState) {
+export class VisualizeContext {
+    constructor(nodes: Node[], edges: Edge[], container: HTMLElement, initialState?: VisualizeContextState) {
         //this.roles = new Set(nodes.map(node => node.group))
 
-        const nodeSet = this.nodes = new vis.DataSet(nodes.map((node, index, arr) => {
+        nodes = nodes.map((node, index, arr) => {
             const angle = 2 * Math.PI * (index / arr.length + 0.75);
             const radius = 225 + arr.length * 10
 
-            const output = Object.assign({}, node)
-            output.x = radius * Math.cos(angle);
-            output.y = radius * Math.sin(angle);
-            return output;
-        }))
+            return Object.assign({}, node, {
+                x: radius * Math.cos(angle),
+                y: radius * Math.sin(angle)
+            })
+        })
 
-        const edgeSet = this.edges = new vis.DataSet(
-            edges.map(e => Object.assign({}, e))
-        )
+        edges = edges.map(e => Object.assign({}, e))
+
+        const nodeSet = this.nodes = new DataSet<Node>(nodes)
+        const edgeSet = this.edges = new DataSet<Edge>(edges)
 
         // Set node border and size based on connected edges        
         nodeSet.update(nodeSet.get()
@@ -75,7 +80,7 @@ class VisualizeContext {
             }
         }
 
-        this.network = new vis.Network(container, {
+        this.network = new Network(container, {
             nodes: nodeSet,
             edges: edgeSet
         }, networkOptions as any)
@@ -92,7 +97,7 @@ class VisualizeContext {
     ///// System operations /////////////////////////////////////////
     
     start() {        
-        const network = this.network as vis.Network
+        const network = this.network as Network
         network.on("click", () => {
             this.network_displaySelection(this.clicks_track())
         })
@@ -110,7 +115,7 @@ class VisualizeContext {
 
     ///// State /////////////////////////////////////////////////////
     
-    private _getterNodes : vis.IdType[] = []
+    private _getterNodes : IdType[] = []
 
     private _state : {
         onlyInteractions: boolean
@@ -121,11 +126,11 @@ class VisualizeContext {
     ///// edges ///////////////////////////////////////////
 
     private edges: {
-        get() : vis.Edge[]
-        get(id: vis.IdType, options?: vis.DataSelectionOptions<vis.Edge>): vis.Edge | null;
-        get(ids: vis.IdType[], options?: vis.DataSelectionOptions<vis.Edge>): vis.Edge[]
-        get(options?: vis.DataSelectionOptions<vis.Edge>): vis.Edge[]
-        update(data: vis.Edge | vis.Edge[], senderId?: vis.IdType): vis.IdType[]
+        get() : Edge[]
+        get(id: IdType): Edge | null;
+        get(ids: IdType[]): Edge[]
+        get(options?: DataInterfaceGetOptions<Edge>): Edge[]
+        update(data: { id: IdType; hidden: boolean }[], senderId?: undefined)
     }
 
     protected edges_displayAll() : void {
@@ -136,7 +141,7 @@ class VisualizeContext {
         this.edges_display(null, false)
     }
 
-    protected edges_display(edgeIds?: vis.IdType[], display = true) : void {
+    protected edges_display(edgeIds?: IdType[], display = true) : void {
         if(edgeIds == null)
             edgeIds = this.edges.get().map(e => e.id)
 
@@ -184,9 +189,9 @@ class VisualizeContext {
     ///// network /////////////////////////////////////////
 
     private network: {
-        getConnectedNodes(nodeOrEdgeId: vis.IdType, direction?: vis.DirectionType): vis.IdType[] | Array<{ fromId: vis.IdType, toId: vis.IdType }>;
-        getConnectedEdges(nodeId: vis.IdType): vis.IdType[];
-        getSelection(): { nodes: vis.IdType[], edges: vis.IdType[] };
+        getConnectedNodes(nodeOrEdgeId: IdType, direction?: DirectionType): IdType[] | Array<{ fromId: IdType, toId: IdType }>;
+        getConnectedEdges(nodeId: IdType): IdType[];
+        getSelection(): { nodes: IdType[], edges: IdType[] };
     }
 
     protected network_selectedNodes() {
@@ -218,31 +223,31 @@ class VisualizeContext {
         } else {
             this.nodes_displayEdgesFor(
                 selected.edges.flatMap(edgeId =>
-                    this.network.getConnectedNodes(edgeId) as vis.IdType[]
+                    this.network.getConnectedNodes(edgeId) as IdType[]
                 ),
                 onlyExactNodes
             )
         }
     }
 
-    protected network_connectedEdges(nodeId: vis.IdType) : vis.IdType[] {
+    protected network_connectedEdges(nodeId: IdType) : IdType[] {
         return this.network.getConnectedEdges(nodeId)
     }
 
     ///// nodes ///////////////////////////////////////////
 
     private nodes: {
-        get(id: vis.IdType, options?: vis.DataSelectionOptions<vis.Node>): vis.Node | null;
-        get(ids: vis.IdType[], options?: vis.DataSelectionOptions<vis.Node>): vis.Node[];
-        get(options?: vis.DataSelectionOptions<vis.Node>): vis.Node[];
-        //update(data: vis.Node | vis.Node[], senderId?: vis.IdType): vis.IdType[];
+        get(id: IdType): Node | null;
+        get(ids: IdType[]): Node[];
+        get(options?: DataInterfaceGetOptions<Node>): Node[];
+        //update(data: Node | Node[], senderId?: IdType): IdType[];
     }
 
-    protected nodes_get(id: vis.IdType) : vis.Node {
+    protected nodes_get(id: IdType) : Node {
         return this.nodes.get(id)
     }
 
-    protected nodes_displayEdgesFor(nodeIdList: vis.IdType[], onlyExactNodes: boolean) : void {
+    protected nodes_displayEdgesFor(nodeIdList: IdType[], onlyExactNodes: boolean) : void {
         const nodes = this.nodes.get(nodeIdList)
 
         const filter = onlyExactNodes
@@ -257,10 +262,10 @@ class VisualizeContext {
         this.edges_display(edges)
     }
 
-    protected nodes_uniPathFrom(nodeId: vis.IdType, visitedIds: vis.IdType[] = []) : vis.IdType[] {
+    protected nodes_uniPathFrom(nodeId: IdType, visitedIds: IdType[] = []) : IdType[] {
         visitedIds.push(nodeId)
 
-        const fromEdges = (nodeId) => this.edges
+        const fromEdges = (nodeId: IdType) => this.edges
         .get(this.network_connectedEdges(nodeId))
         .filter(e => e.from == nodeId)
 
