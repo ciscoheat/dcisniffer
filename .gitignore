@@ -2,3 +2,6 @@
 /DCI/Visualization/app/*.json
 /DCI/Visualization/app/visualizecontext.js
 /DCI/Visualization/app/visualizecontext.js.map
+/DCI/Visualization/app/app.js
+/DCI/Visualization/app/app.js.map
+/DCI/Visualization/build

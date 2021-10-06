@@ -47,7 +47,7 @@ export class VisualizeContext {
                 shape: node.group != '__CONTEXT' 
                     ? (nodeEdgesFrom.length > 0 ? 'dot' : 'diamond')
                     : null,
-                borderWidth: borderWidth,
+                borderWidth: borderWidth,   
                 borderWidthSelected: borderWidth,
                 size: 20 + nodeEdgesFrom.length * 3
             }
@@ -95,7 +95,7 @@ export class VisualizeContext {
     
     ///// System operations /////////////////////////////////////////
     
-    start() {        
+    start() {
         const network = this.network as Network
         network.on("click", () => {
             this.network_displaySelection(this.clicks_track())
@@ -158,6 +158,7 @@ export class VisualizeContext {
                 const edge = this.edges.get(u.id)
 
                 if(!selection.includes(edge.to) &&
+                    !selection.includes(edge.from) &&
                     this._getterNodes.includes(edge.to)
                 ) {
                     u.hidden = true

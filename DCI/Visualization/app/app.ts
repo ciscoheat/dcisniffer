@@ -20,7 +20,7 @@ const App = {
                 checked: state.onlyInteractions,
                 onclick: e => state.onlyInteractions = e.target.checked
             }),
-            "Display interactions only"
+            " Display interactions only"
         ]),
         m('#mynetwork', {
             oncreate: async (vnode : m.VnodeDOM) => {
