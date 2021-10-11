@@ -40,11 +40,22 @@ final class ContextVisualization {
 
             if(!$role && !count($refs)) continue;
 
+            if($role) {
+                $label = [$role->name(), array_search($method, $role->methods())];
+
+                if($method->access() == T_PRIVATE) {
+                    $label[0] = '<i>' . $label[0] . '</i>';
+                    $label[1] = '<i>' . $label[1] . '</i>';
+                }
+
+                $label = implode("\n", $label);
+            } else {
+                $label = $method->fullName();
+            }
+
             $node = (object)[
                 'id' => $method->fullName(),
-                'label' => $role 
-                    ? $role->name() . "\n" . array_search($method, $role->methods())
-                    : $method->fullName(),
+                'label' => $label,
                 'group' => $role ? $role->name() : '__CONTEXT'
             ];
 

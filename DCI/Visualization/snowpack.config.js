@@ -17,10 +17,11 @@ module.exports = {
     /* ... */
   },
   buildOptions: {
-    out: "./build",
-    sourcemap: true
+    out: "./build"
   },
   optimize: {
-    /*minify: true*/
+    minify: true,
+    bundle: true,
+    sourcemap: false
   }
 };

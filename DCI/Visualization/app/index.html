@@ -34,15 +34,37 @@
 
         /* Page CSS */
         #toolbar {
+            display: flex;
+            align-items: center;
             width: 100vw;
-            height: 30px;
+            height: 5vh;
             background-color: aliceblue;
             padding: 3px;
         }
 
+        #toolbar span {
+            padding-left: 1%;
+            padding-right: 1%;
+        }
+
+        @media (max-width: 768px) {
+            #toolbar * {
+                font-size: 2vh;
+            }
+
+            #toolbar input[type=checkbox] {
+                transform: scale(1.75);
+            }        
+        }
+
+        .separator {
+            width: 4%;
+        }
+
+        /* App */
         #mynetwork {
             width: 100vw;
-            height: calc(100vh - 30px);
+            height: 95vh;
         }
     </style>
 </head>

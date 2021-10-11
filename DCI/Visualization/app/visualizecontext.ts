@@ -8,7 +8,8 @@ enum Clicks {
 }
 
 export type VisualizeContextState = {
-    onlyInteractions: boolean
+    onlyInteractions: boolean,
+    file: string
 }
 
 export class VisualizeContext {
@@ -25,22 +26,33 @@ export class VisualizeContext {
             })
         })
 
-        edges = edges.map(e => Object.assign({}, e))
+        edges = edges.map(e => Object.assign({}, e, {
+            
+        }))
 
         const nodeSet = this.nodes = new DataSet<Node>(nodes)
         const edgeSet = this.edges = new DataSet<Edge>(edges)
 
-        // Set node border and size based on connected edges        
+        // Set node and edge properties based on connected edges        
         nodeSet.update(nodeSet.get()
         .map(node => {
             const nodeEdgesFrom = edgeSet.get({filter: e => e.from == node.id})
             const nodeEdgesTo = edgeSet.get({filter: e => e.to == node.id})
 
             const uniqueEdges = (edges) => new Set(edges.map(e => e.from + e.to))
-            const borderWidth = uniqueEdges(nodeEdgesTo).size * 1.5
 
-            if(nodeEdgesFrom.length == 0)
+            // Nodes with no outgoing edges are "getters",
+            // they are only used to access the RolePlayer, or for utility.
+            if(nodeEdgesFrom.length == 0) {
                 this._getterNodes.push(node.id)
+                edgeSet.updateOnly(nodeEdgesTo.map(e => ({
+                    id: e.id,
+                    dashes: true,
+                    width: 1
+                })))
+            }
+
+            const borderWidth = uniqueEdges(nodeEdgesTo).size * 1.5
 
             return {
                 id: node.id,
@@ -58,11 +70,13 @@ export class VisualizeContext {
             nodes: {
                 shape: 'dot',
                 font: {
-                    size: 16
+                    size: 16,
+                    multi: true
                 }
             },
             edges: {
                 arrows: 'to',
+                width: 2,
                 selectionWidth: width => Math.max(3, width * 1.5)
             },
             groups: {
