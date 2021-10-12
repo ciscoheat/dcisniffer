@@ -3,9 +3,9 @@
 <head>
     <meta charset="utf-8"/>
     <title>DCI Context visualization</title>
-
-    <link rel="stylesheet" type="text/css" href="css/vis-network.min.css" />
     <link rel="icon" type="image/png" href="favicon.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="css/vis-network.min.css" />
     <style>
         /* Reset */
         html {
@@ -37,28 +37,24 @@
             display: flex;
             align-items: center;
             width: 100vw;
-            height: 5vh;
+            height: 30px;
             background-color: aliceblue;
             padding: 3px;
         }
 
         #toolbar span {
-            padding-left: 1%;
-            padding-right: 1%;
+            padding-left: 1vw;
+            padding-right: 1vw;
         }
 
-        @media (max-width: 768px) {
-            #toolbar * {
-                font-size: 2vh;
+        @media (max-width: 767.98px) {
+            #toolbar {
+                font-size: 14px;
             }
-
-            #toolbar input[type=checkbox] {
-                transform: scale(1.75);
-            }        
         }
 
         .separator {
-            width: 4%;
+            width: 4vw;
         }
 
         /* App */

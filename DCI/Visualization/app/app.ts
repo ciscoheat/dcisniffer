@@ -36,7 +36,7 @@ const App = {
                 checked: state.onlyInteractions,
                 onclick: e => state.onlyInteractions = e.target.checked
             }),
-            m('span', "Display interactions only"),
+            m('span', "Interactions only"),
             m('.separator'),
             m('span', 'File:'),
             m('select#file', {
