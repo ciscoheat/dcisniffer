@@ -17,6 +17,7 @@ use PHP_CodeSniffer\Standards\DCI\Ref;
 final class ContextVisualization {
     public function __construct(File $file, Context $context, string $saveDir) {
         $this->methods = $context->methods();
+        $this->context = $context;
         $this->_fileName = $saveDir . '/' . $context->name() . '.json';
     }
 
@@ -28,14 +29,20 @@ final class ContextVisualization {
 
     ///// Roles ///////////////////////////////////////////
 
+    private Context $context;
+
+    protected function context_role($name) : ?Role {
+        return $this->context->role($name);
+    }
+
     private array $methods;
 
     protected function methods_convertToVisData() {
         $nodes = [];
         $edges = [];
 
-        foreach ($this->methods as $method) {            
-            $role = $method->role();
+        foreach ($this->methods as $method) {
+            $role = $this->context_role($method->role());
             $refs = $method->refs();
 
             if(!$role && !count($refs)) continue;

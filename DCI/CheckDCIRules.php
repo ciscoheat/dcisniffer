@@ -48,7 +48,7 @@ final class CheckDCIRules {
         $currentRole = null;
 
         foreach($this->context->methods() as $method) {
-            $role = $method->role();
+            $role = $this->context->role($method->role());
 
             if(!$role) {
                 $end = $method->start();
@@ -82,7 +82,7 @@ final class CheckDCIRules {
 
         foreach ($this->context->methods() as $method) {
             $assigned = [];
-            $role = $method->role();
+            $role = $this->context->role($method->role());
 
             if($role && $method->access() == T_PUBLIC) {
                 $msg = 'RoleMethod "%s" is public, must be private or protected.';

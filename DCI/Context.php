@@ -2,7 +2,11 @@
 
 namespace PHP_CodeSniffer\Standards\DCI;
 
-final class Context {
+require_once __DIR__ . '/JsonData.php';
+
+final class Context implements \JsonSerializable {
+    use JsonData;
+
     private string $_name;
     public function name() : string { return $this->_name; }
 
@@ -36,9 +40,19 @@ final class Context {
     public function addMethod(Method $method) {
         $this->_methods[$method->fullName()] = $method;
     }
+
+    public function role(?string $name) : ?Role {
+        return $this->_roles[$name] ?? null;
+    }
+
+    public function jsonSerialize() {
+        return $this->jsonData('start', 'end');
+    }
 }
 
-final class Role {
+final class Role implements \JsonSerializable {
+    use JsonData;
+
     private string $_name;
     public function name() { return $this->_name; }
 
@@ -65,9 +79,15 @@ final class Role {
         $method->setRole($this);
         $this->_methods[$name] = $method;
     }
+
+    public function jsonSerialize() {
+        return $this->jsonData('pos');
+    }
 }
 
-final class Method {
+final class Method implements \JsonSerializable {
+    use JsonData;
+    
     private string $_fullName;
     public function fullName() { return $this->_fullName; }
 
@@ -83,7 +103,7 @@ final class Method {
     private array $_refs = [];
     public function refs() { return $this->_refs; }
 
-    private ?Role $_role = null;
+    private ?string $_role = null;
     public function role() { return $this->_role; }
 
     private array $_tags = [];
@@ -112,11 +132,17 @@ final class Method {
 
     public function setRole(Role $role) {
         assert($this->_role == null, "Role is already set for Method " . $this->fullName());
-        $this->_role = $role;
+        $this->_role = $role->name();
+    }
+
+    public function jsonSerialize() {
+        return $this->jsonData('start', 'end');
     }
 }
 
-final class Ref {
+final class Ref implements \JsonSerializable {
+    use JsonData;
+
     const METHOD = 0;
     const PROPERTY = 1;
     const ROLEMETHOD = 2;
@@ -156,5 +182,9 @@ final class Ref {
         $this->_type = $type;
         $this->_excepted = $excepted;
         $this->_contractCall = $contractCall;
+    }
+
+    public function jsonSerialize() {
+        return $this->jsonData('pos');
     }
 }
