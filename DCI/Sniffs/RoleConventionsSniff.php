@@ -52,7 +52,6 @@ final class RoleConventionsSniff implements Sniff {
     
     ///// Methods /////////////////////////////////////////
 
-
     /**
      * Returns the token types that this sniff is interested in.
      *
@@ -235,7 +234,7 @@ final class RoleConventionsSniff implements Sniff {
 
             if($isRole && $code == T_OPEN_SQUARE_BRACKET) {
                 $type = Ref::ROLE;
-                $contractCall = 'ARRAY';
+                $contractCall = '__ARRAY';
             }
             else if($isRole && $code == T_OBJECT_OPERATOR) {
                 // Role contract access: $this->someRole->method
@@ -289,17 +288,6 @@ final class RoleConventionsSniff implements Sniff {
         return !!$this->context;
     }
 
-    private function context_endPos() : int {
-        return $this->context->end();
-    }
-
-    private function context_addRole(string $name, int $pos, int $access, array $tags) : Role {        
-        $role = new Role($name, $pos, $access, $tags);
-        $this->context->addRole($role);
-
-        return $role;
-    }
-
     protected function context_addMethod(string $name, int $start, int $end, int $access, array $tags) : Method {
         $method = new Method($name, $start, $end, $access, $tags);
         $isRoleMethod = preg_match($this->roleMethodFormat, $name, $matches);
@@ -343,7 +331,8 @@ final class RoleConventionsSniff implements Sniff {
                     }        
                 } while($token['code'] == T_WHITESPACE || array_key_exists($token['code'], Tokens::$commentTokens));
 
-                $this->context_addRole($name, $role->pos, $current['code'], $tags);
+                $role = new Role($name, $role->pos, $current['code'], $tags);
+                $this->context->addRole($role);        
             }
         }
     }
@@ -353,7 +342,7 @@ final class RoleConventionsSniff implements Sniff {
 
         if($current['code'] != T_CLOSE_CURLY_BRACKET) return false;
 
-        if($current['scope_closer'] == $this->context_endPos()) {
+        if($current['scope_closer'] == $this->context->end()) {
             // Context ends, check rules
             $this->context_checkRules();
             return true;
@@ -376,9 +365,9 @@ final class RoleConventionsSniff implements Sniff {
 
         if($this->visDataDir) {
             (new ContextVisualization(
-                @$this->parser, $this->context,
+                $this->context,
                 $this->visDataDir
-            ))->saveVisData();
+            ))->saveJson();
         }
     }
 

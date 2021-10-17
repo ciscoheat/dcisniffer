@@ -1,5 +1,6 @@
 import {DataInterfaceGetOptions, DataSet} from 'vis-data'
 import {Network, IdType, Node, Edge, DirectionType} from 'vis-network'
+import {Context, RefType, Method, Ref} from './context'
 
 enum Clicks {
     Single = 1,
@@ -12,23 +13,205 @@ export type VisualizeContextState = {
     file: string
 }
 
-export class VisualizeContext {
-    constructor(nodes: Node[], edges: Edge[], container: HTMLElement, initialState?: VisualizeContextState) {
-        //this.roles = new Set(nodes.map(node => node.group))
+type RoleMapData = { 
+    interfaces: {name: string, id: string}[]
+    methods: {name: string, id: string}[]
+}
 
-        nodes = nodes.map((node, index, arr) => {
-            const angle = 2 * Math.PI * (index / arr.length + 0.75);
-            const radius = 225 + arr.length * 10
+class ContextToVis {
+    public static readonly CONTEXT = '__CONTEXT'
+    public static readonly ARRAY = '__ARRAY'
 
-            return Object.assign({}, node, {
+    constructor(context: Context) {
+        this.roles = new Map(Object.entries(context.roles))
+        this.methods = Object.values(context.methods)
+
+        this.refs = this.methods
+        .flatMap((m : Method) => m.refs)
+        .filter(r => r.type != RefType.Property && r.type != RefType.RoleAssignment)
+    }
+
+    create() {
+        return this.methods_addMethods()
+    }
+
+    static isInterface(id: string) {
+        return id.endsWith('_RI')
+    }
+
+    ///////////////////////////////////////////////////////
+
+    private roles : Map<string, {
+        methods: { [name: string]: string }
+    }>
+
+    protected roles_methods(role: string) {
+        return Object.entries(this.roles.get(role).methods)
+    }
+
+    private roles_nodesForArc(roleName: string, nodes: {name: string, id: string}[], from: number, to: number, radius: number, isInterface: boolean) {
+        const offset = (to - from) / nodes.length
+
+        return nodes.map((node, index) => {
+            let label : string
+
+            if(roleName == ContextToVis.CONTEXT) {
+                label = node.name
+            } else if(node.name == '__ARRAY') {
+                label = roleName + "[]"
+            } else {
+                label = roleName + "\n" + '<i>' + node.name + '</i>'
+            }
+
+            const angle = from + offset * index
+
+            return {
+                id: node.id,
+                label,
+                group: roleName,
                 x: radius * Math.cos(angle),
                 y: radius * Math.sin(angle)
-            })
+            }
+        })
+    }
+
+    protected roles_createNodes(roleMap: Map<string, RoleMapData>) {
+        const totalLength = Array.from(roleMap.values()).reduce((prev, curr) => {
+            return prev + Math.max(curr.interfaces.length, curr.methods.length)
+        }, 0)
+        
+        const nodes : Node[] = []
+
+        let offset = (3/4) * 2 * Math.PI
+
+        for(const [roleName, role] of roleMap) {
+            const arcLength = Math.max(role.interfaces.length, role.methods.length)
+            const radius = 225 + totalLength * 10
+
+            const start = offset
+            const arc = 2 * Math.PI * (arcLength / totalLength)
+            const end = offset + arc
+
+            const adjust = role.methods.length >= role.interfaces.length
+                ? 0
+                : arc / (role.methods.length + 2)
+
+            this.roles_nodesForArc(roleName, role.methods, start + adjust, end - adjust, radius, false)
+            .forEach(n => nodes.push(n))
+
+            offset = end
+        }
+
+        offset = (3/4) * 2 * Math.PI
+
+        for(const [roleName, role] of roleMap) {
+            const arcLength = Math.max(role.interfaces.length, role.methods.length)
+            const radius = 285 + totalLength * 14
+
+            const start = offset
+            const arc = 2 * Math.PI * (arcLength / totalLength)
+            const end = offset + arc
+
+            const adjust = role.interfaces.length > role.methods.length
+                ? 0
+                : arc / (role.interfaces.length + 2)
+
+            this.roles_nodesForArc(roleName, role.interfaces, start + adjust, end - adjust, radius, true)
+            .forEach(n => nodes.push(n))
+
+            offset = end
+        }
+
+        return this.methods_createEdges(nodes)
+    }
+
+    ///////////////////////////////////////////////////////
+
+    private methods : Array<{
+        fullName: string
+        role?: string
+        refs: Array<Ref>
+    }>
+
+    protected methods_addMethods() {
+        const roleMap : Map<string, RoleMapData> = new Map([[
+            ContextToVis.CONTEXT, {interfaces: [], methods: []}
+        ]])
+
+        this.methods.forEach(method => {
+            if(method.role) {
+                const methodInfo = this.roles_methods(method.role)
+                .find(e => e[1] == method.fullName)
+
+                if(!roleMap.has(method.role))
+                    roleMap.set(method.role, {interfaces: [], methods: []})
+                
+                roleMap.get(method.role).methods.push({name: methodInfo[0], id: methodInfo[1]})
+            }
+            else if(method.refs.find(r => r.type != RefType.Property && r.type != RefType.RoleAssignment)) {
+                roleMap.get(ContextToVis.CONTEXT).methods.push({name: method.fullName, id: method.fullName})
+            }
         })
 
-        edges = edges.map(e => Object.assign({}, e, {
-            
-        }))
+        return this.refs_addRoleInterfaces(roleMap)
+    }
+
+    protected methods_createEdges(nodes: Node[]) {
+        return {
+            nodes,
+            edges: this.methods.flatMap(m => m.refs
+            .filter(r => 
+                r.type != RefType.Property && 
+                r.type != RefType.RoleAssignment &&
+                (r.type != RefType.Role || r.contractCall)
+            )
+            .map(ref => ({
+                from: m.fullName,
+                to: ref.type == RefType.Role && ref.contractCall
+                    ? this.refs_roleInterfaceId(ref)
+                    : ref.to
+            })))
+        }        
+    }
+
+    ///////////////////////////////////////////////////////
+
+    private refs : Array<{
+        to: string,
+        type: RefType
+        contractCall?: string
+    }>
+
+    protected refs_addRoleInterfaces(roleMap: Map<string, RoleMapData>) {
+        this.refs
+        .filter(ref => ref.type == RefType.Role && ref.contractCall)
+        .forEach(ref => {
+            const id = this.refs_roleInterfaceId(ref)
+            const interfaces = roleMap.get(ref.to).interfaces
+
+            if(!interfaces.find(i => i.id == id))
+                interfaces.push({name: ref.contractCall, id})
+        })
+
+        return this.roles_createNodes(roleMap)
+    }
+
+    protected refs_roleInterfaceId(ref) {
+        return ref.to + '_' + ref.contractCall + '_RI'
+    }
+}
+
+/////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////
+
+export class VisualizeContext {
+    constructor(context: Context, container: HTMLElement, initialState?: VisualizeContextState) {
+        let {nodes, edges} = new ContextToVis(context).create()
+
+        //this.roles = new Set(nodes.map(node => node.group))
+
+        console.log(edges)
 
         const nodeSet = this.nodes = new DataSet<Node>(nodes)
         const edgeSet = this.edges = new DataSet<Edge>(edges)
@@ -36,10 +219,15 @@ export class VisualizeContext {
         // Set node and edge properties based on connected edges        
         nodeSet.update(nodeSet.get()
         .map(node => {
-            const nodeEdgesFrom = edgeSet.get({filter: e => e.from == node.id})
+            const nodeEdgesFrom = edgeSet.get({
+                filter: e => e.from == node.id && !ContextToVis.isInterface(e.to.toString())
+            })
             const nodeEdgesTo = edgeSet.get({filter: e => e.to == node.id})
 
             const uniqueEdges = (edges) => new Set(edges.map(e => e.from + e.to))
+
+            const isInterface = ContextToVis.isInterface(node.id.toString())
+            const isGetter = !isInterface && nodeEdgesFrom.length == 0
 
             // Nodes with no outgoing edges are "getters",
             // they are only used to access the RolePlayer, or for utility.
@@ -54,14 +242,21 @@ export class VisualizeContext {
 
             const borderWidth = uniqueEdges(nodeEdgesTo).size * 1.5
 
+            let shape = null
+            if(node.group != '__CONTEXT') {
+                if(isInterface) shape = 'triangleDown'
+                else shape = nodeEdgesFrom.length > 0 
+                    ? 'dot' 
+                    : 'diamond'
+            }
+
             return {
                 id: node.id,
-                shape: node.group != '__CONTEXT' 
-                    ? (nodeEdgesFrom.length > 0 ? 'dot' : 'diamond')
-                    : null,
+                shape,
                 borderWidth: borderWidth,   
                 borderWidthSelected: borderWidth,
-                size: 20 + nodeEdgesFrom.length * 3
+                size: 20 + nodeEdgesFrom.length * 3,
+                opacity: isGetter && nodeEdgesTo.length == 1 ? 0.5 : undefined
             }
         }))
 

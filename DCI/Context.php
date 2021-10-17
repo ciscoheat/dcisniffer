@@ -41,10 +41,6 @@ final class Context implements \JsonSerializable {
         $this->_methods[$method->fullName()] = $method;
     }
 
-    public function role(?string $name) : ?Role {
-        return $this->_roles[$name] ?? null;
-    }
-
     public function jsonSerialize() {
         return $this->jsonData('start', 'end');
     }
@@ -81,7 +77,12 @@ final class Role implements \JsonSerializable {
     }
 
     public function jsonSerialize() {
-        return $this->jsonData('pos');
+        $output = $this->jsonData('pos');
+        $output['methods'] = array_map(function($method) { 
+            return $method->fullName(); 
+        }, $output['methods']);
+        
+        return $output;
     }
 }
 
@@ -103,7 +104,7 @@ final class Method implements \JsonSerializable {
     private array $_refs = [];
     public function refs() { return $this->_refs; }
 
-    private ?string $_role = null;
+    private ?Role $_role = null;
     public function role() { return $this->_role; }
 
     private array $_tags = [];
@@ -132,11 +133,13 @@ final class Method implements \JsonSerializable {
 
     public function setRole(Role $role) {
         assert($this->_role == null, "Role is already set for Method " . $this->fullName());
-        $this->_role = $role->name();
+        $this->_role = $role;
     }
 
     public function jsonSerialize() {
-        return $this->jsonData('start', 'end');
+        $output = $this->jsonData('start', 'end');
+        if($this->role()) $output['role'] = $this->role()->name();
+        return $output;
     }
 }
 
@@ -168,7 +171,7 @@ final class Ref implements \JsonSerializable {
      * Can only exist if type is ROLE.
      * Can be either a method name, or the special value ARRAY for array access.
      */
-    private ?string $_contractCall; 
+    private ?string $_contractCall;
     public function contractCall() { return $this->_contractCall; }
 
     public function __construct(string $to, int $pos, int $type, bool $excepted, ?string $contractCall) {

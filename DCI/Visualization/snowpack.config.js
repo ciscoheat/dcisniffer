@@ -17,7 +17,8 @@ module.exports = {
     /* ... */
   },
   buildOptions: {
-    out: "./build"
+    out: "./build",
+    sourcemap: false
   },
   optimize: {
     minify: true,

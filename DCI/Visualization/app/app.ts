@@ -1,5 +1,6 @@
 import m from 'mithril'
 import { VisualizeContext, VisualizeContextState } from './visualizecontext'
+import { Context } from './context'
 
 const files = ["RoleConventionsSniff", 'CheckDCIRules', 'ContextVisualization', 'ListContextInformation']
 
@@ -11,12 +12,11 @@ const state : VisualizeContextState = {
 let visualizer : VisualizeContext | null = null;
 
 const createVisualizer = async (vnode : m.VnodeDOM) => {
-    const json = await fetch(state.file + '.json')
+    const context : Context = await fetch(state.file + '.json')
         .then(response => response.json())
 
     visualizer = new VisualizeContext(
-        json.nodes, 
-        json.edges, 
+        context,
         vnode.dom as HTMLElement
     )
 
