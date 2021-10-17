@@ -2,7 +2,7 @@ import m from 'mithril'
 import { VisualizeContext, VisualizeContextState } from './visualizecontext'
 import { Context } from './context'
 
-const files = ["RoleConventionsSniff", 'CheckDCIRules', 'ContextVisualization', 'ListContextInformation']
+const files = ["RoleConventionsSniff", 'CheckDCIRules', 'ListContextInformation']
 
 const state : VisualizeContextState = {
     onlyInteractions: false,

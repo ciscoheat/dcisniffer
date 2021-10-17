@@ -56,11 +56,17 @@ class ContextToVis {
             let label : string
 
             if(roleName == ContextToVis.CONTEXT) {
+                // Context access
                 label = node.name
             } else if(node.name == '__ARRAY') {
+                // Role player array access
                 label = roleName + "[]"
+            } else if(roleName == node.name) {
+                // Direct Role player access
+                label = roleName
             } else {
-                label = roleName + "\n" + '<i>' + node.name + '</i>'
+                // RoleMethod access
+                label = roleName + "\n" + node.name
             }
 
             const angle = from + offset * index
@@ -167,7 +173,7 @@ class ContextToVis {
             )
             .map(ref => ({
                 from: m.fullName,
-                to: ref.type == RefType.Role && ref.contractCall
+                to: ref.type == RefType.Role
                     ? this.refs_roleInterfaceId(ref)
                     : ref.to
             })))
@@ -184,20 +190,26 @@ class ContextToVis {
 
     protected refs_addRoleInterfaces(roleMap: Map<string, RoleMapData>) {
         this.refs
-        .filter(ref => ref.type == RefType.Role && ref.contractCall)
+        .filter(ref => ref.type == RefType.Role && 
+            ref.contractCall && ref.contractCall != '__ARRAY'
+        )
         .forEach(ref => {
             const id = this.refs_roleInterfaceId(ref)
             const interfaces = roleMap.get(ref.to).interfaces
 
-            if(!interfaces.find(i => i.id == id))
-                interfaces.push({name: ref.contractCall, id})
+            if(!interfaces.find(i => i.id == id)) {
+                interfaces.push({
+                    name: ref.contractCall ? ref.contractCall : ref.to, 
+                    id
+                })
+            }
         })
 
         return this.roles_createNodes(roleMap)
     }
 
     protected refs_roleInterfaceId(ref) {
-        return ref.to + '_' + ref.contractCall + '_RI'
+        return ref.to + (ref.contractCall ? '_' + ref.contractCall : '') + '_RI'
     }
 }
 
