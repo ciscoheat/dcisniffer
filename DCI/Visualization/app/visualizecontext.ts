@@ -59,9 +59,13 @@ export class VisualizeContext {
                 shape,
                 borderWidth: borderWidth,   
                 borderWidthSelected: borderWidth,
-                size: 20 + nodeEdgesFrom.length * 3,
+                size: isInterface 
+                    ? 12 + nodeEdgesTo.length * 3
+                    : 20 + nodeEdgesFrom.length * 3,
                 opacity: isGetter && nodeEdgesTo.length == 1 ? 0.5 : undefined,
-                font: isInterface ? {color: '#555', size: 15} : undefined
+                font: isInterface 
+                    ? {color: '#555', size: 15} 
+                    : undefined
             }
         }))
 
