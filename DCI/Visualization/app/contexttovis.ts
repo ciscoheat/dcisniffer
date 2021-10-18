@@ -1,4 +1,4 @@
-import {IdType, Node, Edge, DirectionType} from 'vis-network'
+import {Node} from 'vis-network'
 import {Context, RefType, Method, Ref, Access} from './context'
 
 type RoleData = {name: string, id: string, access: Access}
@@ -55,7 +55,7 @@ export class ContextToVis {
 
         for(const [roleName, role] of this.roleMap) {
             const arcLength = Math.max(role.interfaces.length, role.methods.length)
-            const radius = 225 + totalLength * 10
+            const radius = 100 + totalLength * 20
 
             const start = offset
             const arc = 2 * Math.PI * (arcLength / totalLength)
@@ -65,7 +65,7 @@ export class ContextToVis {
                 ? 0
                 : arc / (role.methods.length + 2)
 
-            this.roles_nodesForArc(roleName, role.methods, start + adjust, end - adjust, radius, false)
+            this.roles_nodesForArc(roleName, role.methods, start + adjust, end - adjust, radius)
             .forEach(n => nodes.push(n))
 
             offset = end
@@ -75,7 +75,7 @@ export class ContextToVis {
 
         for(const [roleName, role] of this.roleMap) {
             const arcLength = Math.max(role.interfaces.length, role.methods.length)
-            const radius = 285 + totalLength * 14
+            const radius = 200 + Math.max(0, (10 - totalLength) * 15) + totalLength * 22
 
             const start = offset
             const arc = 2 * Math.PI * (arcLength / totalLength)
@@ -85,7 +85,7 @@ export class ContextToVis {
                 ? 0
                 : arc / (role.interfaces.length + 2)
 
-            this.roles_nodesForArc(roleName, role.interfaces, start + adjust, end - adjust, radius, true)
+            this.roles_nodesForArc(roleName, role.interfaces, start + adjust, end - adjust, radius)
             .forEach(n => nodes.push(n))
 
             offset = end
@@ -107,7 +107,7 @@ export class ContextToVis {
         return Object.entries(this.roles.get(role).methods)
     }
 
-    private roles_nodesForArc(roleName: string, nodes: {name: string, id: string, access: Access}[], from: number, to: number, radius: number, isInterface: boolean) {
+    private roles_nodesForArc(roleName: string, nodes: RoleData[], from: number, to: number, radius: number) {
         const offset = (to - from) / nodes.length
 
         return nodes.map((node, index) => {
@@ -183,7 +183,7 @@ export class ContextToVis {
                 from: m.fullName,
                 to: ref.type == RefType.Role
                     ? this.refs_roleInterfaceId(ref)
-                    : ref.to
+                    : ref.to,
             })
         ))
     }
@@ -199,7 +199,7 @@ export class ContextToVis {
     protected refs_addRoleInterfaces() {
         this.refs
         .filter(ref => ref.type == RefType.Role && 
-            ref.contractCall && ref.contractCall != '__ARRAY'
+            ref.contractCall && ref.contractCall != ContextToVis.ARRAY
         )
         .forEach(ref => {
             const id = this.refs_roleInterfaceId(ref)

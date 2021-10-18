@@ -16,7 +16,7 @@ const createVisualizer = async (vnode : m.VnodeDOM) => {
     const context : Context = await fetch(state.file + '.json')
         .then(response => response.json())
 
-    let {nodes, edges} = new ContextToVis(context).create()
+    const {nodes, edges} = new ContextToVis(context).create()
 
     visualizer = new VisualizeContext(
         nodes, edges,

@@ -39,7 +39,7 @@ export class VisualizeContext {
                 this._getterNodes.push(node.id)
                 edgeSet.updateOnly(nodeEdgesTo.map(e => ({
                     id: e.id,
-                    dashes: true,
+                    dashes: isInterface ? [3, 10] : [8, 5],
                     width: 1
                 })))
             }
@@ -60,11 +60,13 @@ export class VisualizeContext {
                 borderWidth: borderWidth,   
                 borderWidthSelected: borderWidth,
                 size: isInterface 
-                    ? 12 + nodeEdgesTo.length * 3
+                    ? 10 + nodeEdgesTo.length * 3
                     : 20 + nodeEdgesFrom.length * 3,
-                opacity: isGetter && nodeEdgesTo.length == 1 ? 0.5 : undefined,
+                opacity: isGetter && nodeEdgesTo.length == 1 
+                    ? 0.5 
+                    : undefined,
                 font: isInterface 
-                    ? {color: '#555', size: 15} 
+                    ? {size: 14.5} 
                     : undefined
             }
         }))
@@ -162,7 +164,7 @@ export class VisualizeContext {
         if(edgeIds == null)
             edgeIds = this.edges.get().map(e => e.id)
 
-        let updates = edgeIds.map(id => ({
+        const updates = edgeIds.map(id => ({
             id: id,
             hidden: !display
         }))
